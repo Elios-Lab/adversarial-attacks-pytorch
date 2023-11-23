@@ -25,7 +25,7 @@ class Attack(object):
         To change this, please see `set_model_training_mode`.
     """
 
-    def __init__(self, name, model):
+    def __init__(self, name, yolo, model):
         r"""
         Initializes internal attack state.
 
@@ -36,6 +36,8 @@ class Attack(object):
 
         self.attack = name
         self._attacks = OrderedDict()
+        
+        self.yolo = yolo
 
         self.set_model(model)
         try:
@@ -61,7 +63,7 @@ class Attack(object):
         self._batchnorm_training = False
         self._dropout_training = False
 
-    def forward(self, inputs, labels=None, *args, **kwargs):
+    def forward(self, inputs, bboxes=None, labels=None, *args, **kwargs):
         r"""
         It defines the computation performed at every call.
         Should be overridden by all subclasses.
@@ -494,24 +496,26 @@ class Attack(object):
 
         return target_labels.long().to(self.device)
 
-    def __call__(self, inputs, labels=None, *args, **kwargs):
-        given_training = self.model.training
-        self._change_model_mode(given_training)
+    def __call__(self, inputs, bboxes=None, labels=None, *args, **kwargs):
+        if not self.yolo:
+            given_training = self.model.training
+            self._change_model_mode(given_training)
 
         if self._normalization_applied is True:
             inputs = self.inverse_normalize(inputs)
             self._set_normalization_applied(False)
 
-            adv_inputs = self.forward(inputs, labels, *args, **kwargs)
+            adv_inputs = self.forward(inputs, bboxes, labels, *args, **kwargs)
             # adv_inputs = self.to_type(adv_inputs, self.return_type)
 
             adv_inputs = self.normalize(adv_inputs)
             self._set_normalization_applied(True)
         else:
-            adv_inputs = self.forward(inputs, labels, *args, **kwargs)
+            adv_inputs = self.forward(inputs, bboxes, labels, *args, **kwargs)
             # adv_inputs = self.to_type(adv_inputs, self.return_type)
 
-        self._recover_model_mode(given_training)
+        if not self.yolo:
+            self._recover_model_mode(given_training)
 
         return adv_inputs
 

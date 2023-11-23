@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from ..attack import Attack
-
+from yolo_adv.utils import YOLOv8DetectionLoss
 
 class FGSM(Attack):
     r"""
@@ -26,12 +26,14 @@ class FGSM(Attack):
 
     """
 
-    def __init__(self, model, eps=8 / 255):
-        super().__init__("FGSM", model)
+    def __init__(self, model, yolo, eps=8 / 255):
+        super().__init__("FGSM", yolo, model)
         self.eps = eps
         self.supported_mode = ["default", "targeted"]
+        if self.yolo:
+            self.loss_obj = YOLOv8DetectionLoss(model, max_steps=1)
 
-    def forward(self, images, labels):
+    def forward(self, images, bboxes, labels):
         r"""
         Overridden.
         """
@@ -42,16 +44,24 @@ class FGSM(Attack):
         if self.targeted:
             target_labels = self.get_target_label(images, labels)
 
-        loss = nn.CrossEntropyLoss()
+        if not self.yolo:
+            loss = nn.CrossEntropyLoss()
 
         images.requires_grad = True
-        outputs = self.get_logits(images)
+        if not self.yolo:
+            outputs = self.get_logits(images)
 
         # Calculate loss
         if self.targeted:
-            cost = -loss(outputs, target_labels)
+            if self.yolo:
+                cost = -self.loss_obj.compute_loss(images, target_labels, bboxes, 0, requires_grad=True)
+            else:
+                cost = -loss(outputs, target_labels)
         else:
-            cost = loss(outputs, labels)
+            if self.yolo:
+                cost = self.loss_obj.compute_loss(images, labels, bboxes, 0, requires_grad=True)
+            else:      
+                cost = loss(outputs, labels)
 
         # Update adversarial images
         grad = torch.autograd.grad(
@@ -61,4 +71,4 @@ class FGSM(Attack):
         adv_images = images + self.eps * grad.sign()
         adv_images = torch.clamp(adv_images, min=0, max=1).detach()
 
-        return adv_images
+        return self.loss_obj.losses, adv_images

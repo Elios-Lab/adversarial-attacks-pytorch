@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 
 from ..attack import Attack
-
+from yolo_adv.utils import YOLOv8DetectionLoss
+from tqdm import tqdm
 
 class PGD(Attack):
     r"""
@@ -29,15 +30,17 @@ class PGD(Attack):
 
     """
 
-    def __init__(self, model, eps=8 / 255, alpha=2 / 255, steps=10, random_start=True):
-        super().__init__("PGD", model)
+    def __init__(self, model, yolo, eps=8 / 255, alpha=2 / 255, steps=10, random_start=True):
+        super().__init__("PGD", yolo, model)
         self.eps = eps
         self.alpha = alpha
         self.steps = steps
         self.random_start = random_start
         self.supported_mode = ["default", "targeted"]
+        if self.yolo:
+            self.loss_obj = YOLOv8DetectionLoss(model, max_steps=steps)
 
-    def forward(self, images, labels):
+    def forward(self, images, bboxes, labels):
         r"""
         Overridden.
         """
@@ -48,7 +51,9 @@ class PGD(Attack):
         if self.targeted:
             target_labels = self.get_target_label(images, labels)
 
-        loss = nn.CrossEntropyLoss()
+        if not self.yolo:
+            loss = nn.CrossEntropyLoss()
+            
         adv_images = images.clone().detach()
 
         if self.random_start:
@@ -58,15 +63,22 @@ class PGD(Attack):
             )
             adv_images = torch.clamp(adv_images, min=0, max=1).detach()
 
-        for _ in range(self.steps):
+        for _ in tqdm(range(self.steps), leave=False, desc="steps"):
             adv_images.requires_grad = True
-            outputs = self.get_logits(adv_images)
+            if not self.yolo:
+                outputs = self.get_logits(adv_images)
 
             # Calculate loss
             if self.targeted:
-                cost = -loss(outputs, target_labels)
+                if self.yolo:
+                    cost = -self.loss_obj.compute_loss(adv_images, target_labels, bboxes, _, requires_grad=True)
+                else:
+                    cost = -loss(outputs, target_labels)
             else:
-                cost = loss(outputs, labels)
+                if self.yolo:
+                    cost = self.loss_obj.compute_loss(adv_images, labels, bboxes, _, requires_grad=True)
+                else:
+                    cost = loss(outputs, labels)
 
             # Update adversarial images
             grad = torch.autograd.grad(
@@ -76,5 +88,5 @@ class PGD(Attack):
             adv_images = adv_images.detach() + self.alpha * grad.sign()
             delta = torch.clamp(adv_images - images, min=-self.eps, max=self.eps)
             adv_images = torch.clamp(images + delta, min=0, max=1).detach()
-
-        return adv_images
+        
+        return self.loss_obj.losses, adv_images

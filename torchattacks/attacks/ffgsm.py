@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 from ..attack import Attack
+from yolo_adv.utils import YOLOv8DetectionLoss
 
 
 class FFGSM(Attack):
@@ -26,13 +27,15 @@ class FFGSM(Attack):
         >>> adv_images = attack(images, labels)
     """
 
-    def __init__(self, model, eps=8 / 255, alpha=10 / 255):
-        super().__init__("FFGSM", model)
+    def __init__(self, model, yolo, eps=8 / 255, alpha=10 / 255):
+        super().__init__("FFGSM", yolo, model)
         self.eps = eps
         self.alpha = alpha
         self.supported_mode = ["default", "targeted"]
+        if self.yolo:
+            self.loss_obj = YOLOv8DetectionLoss(model, max_steps=1)
 
-    def forward(self, images, labels):
+    def forward(self, images, bboxes, labels):
         r"""
         Overridden.
         """
@@ -43,7 +46,8 @@ class FFGSM(Attack):
         if self.targeted:
             target_labels = self.get_target_label(images, labels)
 
-        loss = nn.CrossEntropyLoss()
+        if not self.yolo:
+            loss = nn.CrossEntropyLoss()
 
         adv_images = images + torch.randn_like(images).uniform_(
             -self.eps, self.eps
@@ -51,13 +55,20 @@ class FFGSM(Attack):
         adv_images = torch.clamp(adv_images, min=0, max=1).detach()
         adv_images.requires_grad = True
 
-        outputs = self.get_logits(adv_images)
+        if not self.yolo:
+            outputs = self.get_logits(adv_images)
 
         # Calculate loss
         if self.targeted:
-            cost = -loss(outputs, target_labels)
+            if self.yolo:
+                cost = -self.loss_obj.compute_loss(adv_images, target_labels, bboxes, 0, requires_grad=True)
+            else:
+                cost = -loss(outputs, target_labels)
         else:
-            cost = loss(outputs, labels)
+            if self.yolo:
+                cost = self.loss_obj.compute_loss(adv_images, labels, bboxes, 0, requires_grad=True)
+            else:
+                cost = loss(outputs, labels)
 
         # Update adversarial images
         grad = torch.autograd.grad(
@@ -68,4 +79,4 @@ class FFGSM(Attack):
         delta = torch.clamp(adv_images - images, min=-self.eps, max=self.eps)
         adv_images = torch.clamp(images + delta, min=0, max=1).detach()
 
-        return adv_images
+        return self.loss_obj.losses, adv_images

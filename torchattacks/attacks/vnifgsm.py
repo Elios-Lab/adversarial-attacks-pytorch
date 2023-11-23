@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 
 from ..attack import Attack
+from yolo_adv.utils import YOLOv8DetectionLoss
+from tqdm import tqdm
 
 
 class VNIFGSM(Attack):
@@ -33,9 +35,9 @@ class VNIFGSM(Attack):
     """
 
     def __init__(
-        self, model, eps=8 / 255, alpha=2 / 255, steps=10, decay=1.0, N=5, beta=3 / 2
+        self, model, yolo=False, eps=8 / 255, alpha=2 / 255, steps=10, decay=1.0, N=5, beta=3 / 2
     ):
-        super().__init__("VNIFGSM", model)
+        super().__init__("VNIFGSM", yolo, model)
         self.eps = eps
         self.steps = steps
         self.decay = decay
@@ -43,8 +45,10 @@ class VNIFGSM(Attack):
         self.N = N
         self.beta = beta
         self.supported_mode = ["default", "targeted"]
+        if self.yolo:
+            self.loss_obj = YOLOv8DetectionLoss(model, max_steps=steps)
 
-    def forward(self, images, labels):
+    def forward(self, images, bboxes, labels):
         r"""
         Overridden.
         """
@@ -57,19 +61,27 @@ class VNIFGSM(Attack):
 
         momentum = torch.zeros_like(images).detach().to(self.device)
         v = torch.zeros_like(images).detach().to(self.device)
-        loss = nn.CrossEntropyLoss()
+        if not self.yolo:
+            loss = nn.CrossEntropyLoss()
         adv_images = images.clone().detach()
 
-        for _ in range(self.steps):
+        for _ in tqdm(range(self.steps), leave=False, desc="steps"):
             adv_images.requires_grad = True
             nes_images = adv_images + self.decay * self.alpha * momentum
-            outputs = self.get_logits(nes_images)
+            if not self.yolo:
+                outputs = self.get_logits(nes_images)
 
             # Calculate loss
             if self.targeted:
-                cost = -loss(outputs, target_labels)
+                if self.yolo:
+                    cost = -self.loss_obj.compute_loss(nes_images, target_labels, bboxes, _, requires_grad=True)
+                else:
+                    cost = -loss(outputs, target_labels)
             else:
-                cost = loss(outputs, labels)
+                if self.yolo:
+                    cost = self.loss_obj.compute_loss(nes_images, labels, bboxes, _, requires_grad=True)
+                else:      
+                    cost = loss(outputs, labels)
 
             # Update adversarial images
             adv_grad = torch.autograd.grad(
@@ -89,13 +101,20 @@ class VNIFGSM(Attack):
                     images
                 ).uniform_(-self.eps * self.beta, self.eps * self.beta)
                 neighbor_images.requires_grad = True
-                outputs = self.get_logits(neighbor_images)
+                if not self.yolo:
+                    outputs = self.get_logits(neighbor_images)
 
                 # Calculate loss
                 if self.targeted:
-                    cost = -loss(outputs, target_labels)
+                    if self.yolo:
+                        cost = -self.loss_obj.compute_loss(neighbor_images, target_labels, bboxes, _, requires_grad=True)
+                    else:
+                        cost = -loss(outputs, target_labels)
                 else:
-                    cost = loss(outputs, labels)
+                    if self.yolo:
+                        cost = self.loss_obj.compute_loss(neighbor_images, labels, bboxes, _, requires_grad=True)
+                    else:      
+                        cost = loss(outputs, labels)
                 GV_grad += torch.autograd.grad(
                     cost, neighbor_images, retain_graph=False, create_graph=False
                 )[0]
@@ -106,4 +125,4 @@ class VNIFGSM(Attack):
             delta = torch.clamp(adv_images - images, min=-self.eps, max=self.eps)
             adv_images = torch.clamp(images + delta, min=0, max=1).detach()
 
-        return adv_images
+        return self.loss_obj.losses, adv_images
