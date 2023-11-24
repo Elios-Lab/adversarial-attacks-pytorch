@@ -2,68 +2,130 @@ from torch.utils.data import DataLoader
 from PIL import Image
 from ultralytics import YOLO
 from torchvision import transforms
-from utils import YOLOv8Dataloader, YOLOv8DetectionLoss
+from utils import YOLOv8Dataloader
 from torchattacks import PGD, FGSM, FFGSM, VNIFGSM
 from matplotlib import pyplot as plt
 from tqdm import tqdm
-import cv2
+import argparse
+import os
 
 
-def plot_loss(idx, col, atk):
-    plt.suptitle(f"YOLOv8 Inference vs {atk.__repr__().split('(')[0]} Attack - Steps: {atk.steps if hasattr(atk,'steps') else 1}, Epsilon: {round(atk.eps,3)}, Decay: {round(atk.decay,3) if hasattr(atk,'decay') else None}, Alpha: {round(atk.alpha,3) if hasattr(atk,'alpha') else None}, Beta: {round(atk.beta,3) if hasattr(atk,'beta') else None}, N: {atk.N if hasattr(atk,'N') else None}")
-    plt.subplot(len(data_loader), col, idx + 1).figure.set_size_inches(20, 10)
+def plot_loss(dl_len, yolo_output, idx, col, atk):
+    plt.suptitle(f"YOLOv8 Inference vs {atk.__repr__().split('(')[0]} Attack - Steps: {atk.steps if hasattr(atk,'steps') else 1}, Epsilon: {round(atk.eps,3)}, \
+        Decay: {round(atk.decay,3) if hasattr(atk,'decay') else None}, Alpha: {round(atk.alpha,3) if hasattr(atk,'alpha') else None}, \
+        Beta: {round(atk.beta,3) if hasattr(atk,'beta') else None}, N: {atk.N if hasattr(atk,'N') else None}")
+    plt.subplot(dl_len, col, idx + 1).figure.set_size_inches(30, 15)
     plt.title("Inference Image")
     plt.axis('off')
     plt.imshow(yolo_output[0])
-    plt.subplot(len(data_loader), col, idx + 2)
+    plt.subplot(dl_len, col, idx + 2)
     plt.title("Adversarial Image")
     plt.axis('off')
     plt.imshow(yolo_output[1])
     if atk.__repr__().split('(')[0] == "PGD" or atk.__repr__().split('(')[0] == "VNIFGSM":
-        plt.subplot(len(data_loader), col, idx + 3)
+        plt.subplot(dl_len, col, idx + 3)
         plt.title("YOLOv8 Loss")
         plt.plot(loss)
         plt.grid()
 
 if __name__ == '__main__':
     
+    argparser = argparse.ArgumentParser(description='YOLOv8 Attack')
+    argparser.add_argument('--input_data_dir',
+                           '-idd',
+                           default='./yolo_adv/adv_data/norm',
+                           type=str,
+                           help='path to input data directory, must contain images and labels directories (default: ./yolo_adv/adv_data/norm)')
+   
+    argparser.add_argument('--output_data_dir',
+                           '-odd',
+                           default='./yolo_adv/adv_data/adv',
+                           type=str,
+                           help='path to output data directory (default: ./yolo_adv/adv_data/adv)')
+    
+    argparser.add_argument('--model_path',
+                            '-mp',
+                            default='./yolo_adv/best.pt',
+                            type=str,
+                            help='define the path of the YOLOv8 model to attack (default: ./yolo_adv/best.pt)')
+        
+    argparser.add_argument('--atk_type',
+                           '-at',
+                           default='PGD',
+                           type=str,
+                           help='select between PGD, FGSM, FFGSSM and VNIFGSM for your adversarial perturbation (default: PGD)')
+    
+    argparser.add_argument('--steps',
+                            '-s',
+                            default=100,
+                            type=int,
+                            help='define the number of steps of the adversarial attack, if applicable (default: 100)')
+    
+    argparser.add_argument('--plot',
+                            '-p',
+                            default=False,
+                            type=bool,
+                            help='plot results (default: False)')
+    
+    argparser.add_argument('--save_inference',
+                           '-si',
+                           default=True,
+                           type=bool,
+                           help='choose wheter to save inference results for both normal and adversarial images (default: True)')
+    
+    args = argparser.parse_args()
+    
     transform = transforms.ToPILImage()
 
-    model = YOLO("./yolo_adv/best.pt")
+    model = YOLO(args.model_path)
     model.to(device='cuda', non_blocking=True)
     model.training = False
 
-    steps = 100
-     
-    atk = PGD(model=model, yolo=True, eps=0.024, steps=steps)
-    # atk = FGSM(model=model, yolo=True, eps=0.024)
-    # atk = FFGSM(model=model, yolo=True, eps=0.024, alpha=0.055)
-    # atk = VNIFGSM(model=model, yolo=True, eps=0.024, alpha=0.05, steps=steps, decay=1.0, N=5, beta=3/2)
-    # atk = DeepFool(model=model, yolo=True, steps=steps)
-    # 
+    if args.atk_type == 'PGD':
+        atk = PGD(model=model, yolo=True, eps=0.024, steps=args.steps)
+    elif args.atk_type == 'FGSM':
+        atk = FGSM(model=model, yolo=True, eps=0.024)
+    elif args.atk_type == 'FFGSM':
+        atk = FFGSM(model=model, yolo=True, eps=0.024, alpha=0.055)
+    elif args.atk_type == 'VNIFGSM':
+        atk = VNIFGSM(model=model, yolo=True, eps=0.024, alpha=0.05, steps=args.steps, decay=1.0, N=5, beta=3/2)
+    
     # Create the dataset
-    dataset = YOLOv8Dataloader(images_dir='./yolo_adv/test_data/images', annotations_dir='./yolo_adv/test_data/labels/', transform=None)
+    dataset = YOLOv8Dataloader(images_dir=f'{args.input_data_dir}/images', annotations_dir=f'{args.input_data_dir}/labels', transform=None)
  
     # Create the DataLoader
     data_loader = DataLoader(dataset, shuffle=True, collate_fn=lambda x: x)
+    dl_len = len(data_loader)
    
-    for i, data in tqdm(enumerate(data_loader), total=len(data_loader), desc=f"Running {atk.__repr__().split('(')[0]} Attack"):
+    for i, data in tqdm(enumerate(data_loader), total=dl_len, desc=f"Running {atk.__repr__().split('(')[0]} Attack"):
         yolo_output = []
         loss, adv_img = atk(data[0]['image'], data[0]['boxes'], data[0]['classes'])
     
         inference_img = transform(data[0]['image'][0].detach().clone())
         adv_img = transform(adv_img[0].detach().clone())
-        
+                
         results = model([inference_img, adv_img], verbose=False)
         
         for r in results:
-            im_array = r.plot()  # plot a BGR numpy array of predictions
-            im = Image.fromarray(im_array[..., ::-1])  # RGB PIL image
+            im_array = r.plot()
+            im = Image.fromarray(im_array[..., ::-1])
             yolo_output.append(im)
-        # 
-        if atk.__repr__().split('(')[0] == "PGD" or atk.__repr__().split('(')[0] == "VNIFGSM":
-            plot_loss(i*3, 3, atk)
-        else:
-            plot_loss(i*2, 2, atk)
+
+        if args.plot == False:
+            if atk.__repr__().split('(')[0] == "PGD" or atk.__repr__().split('(')[0] == "VNIFGSM":
+                plot_loss(dl_len, yolo_output, i*3, 3, atk)
+            else:
+                plot_loss(dl_len, yolo_output, i*2, 2, atk)        
+        
+        directories = ['adv_img', 'norm_inf', 'adv_inf']
+        for directory in directories:
+            os.makedirs(f'{args.output_data_dir}/{directory}/', exist_ok=True)
+            if not args.save_inference:
+                break
+
+        adv_img.save(f'{args.output_data_dir}/adv_img/{i}.png')
+        if args.save_inference:
+            for idx, output in enumerate(yolo_output):
+                output.save(f'{args.output_data_dir}/{directories[idx+1]}/{i}.png')
             
     plt.show()

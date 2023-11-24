@@ -13,6 +13,8 @@ MENIFEST.in
 setup.cfg
 _commit.bat
 
+yolo_adv/ad_data/norm/*
+
 autoattack/*
 
 demo/_*
