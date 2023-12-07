@@ -26,14 +26,14 @@ class FGSM(Attack):
 
     """
 
-    def __init__(self, model, yolo, eps=8 / 255):
+    def __init__(self, model, yolo=False, eps=8 / 255):
         super().__init__("FGSM", yolo, model)
         self.eps = eps
         self.supported_mode = ["default", "targeted"]
         if self.yolo:
             self.loss_obj = YOLOv8DetectionLoss(model, max_steps=1)
 
-    def forward(self, images, bboxes, labels):
+    def forward(self, images, labels, bboxes=None):
         r"""
         Overridden.
         """
@@ -71,4 +71,7 @@ class FGSM(Attack):
         adv_images = images + self.eps * grad.sign()
         adv_images = torch.clamp(adv_images, min=0, max=1).detach()
 
-        return self.loss_obj.losses, adv_images
+        if self.yolo:
+            return self.loss_obj.losses, adv_images
+        else:
+            return adv_images

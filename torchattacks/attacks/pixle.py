@@ -5,7 +5,8 @@ import torch
 from torch.nn.functional import softmax
 
 from ..attack import Attack
-
+from yolo_adv.utils import YOLOv8DetectionLoss
+from tqdm import tqdm
 
 class Pixle(Attack):
     r"""
@@ -37,6 +38,7 @@ class Pixle(Attack):
     def __init__(
         self,
         model,
+        yolo = False,
         x_dimensions=(2, 10),
         y_dimensions=(2, 10),
         pixel_mapping="random",
@@ -44,7 +46,7 @@ class Pixle(Attack):
         max_iterations=10,
         update_each_iteration=False,
     ):
-        super().__init__("Pixle", model)
+        super().__init__("Pixle", yolo, model)
 
         if restarts < 0 or not isinstance(restarts, int):
             raise ValueError(
@@ -56,6 +58,9 @@ class Pixle(Attack):
 
         self.restarts = restarts
         self.pixel_mapping = pixel_mapping.lower()
+        self.yolo = yolo
+        if self.yolo:
+            self.loss_obj = YOLOv8DetectionLoss(model, max_steps=max_iterations)
 
         if self.pixel_mapping not in [
             "random",
@@ -94,16 +99,22 @@ class Pixle(Attack):
 
         self.supported_mode = ["default", "targeted"]
 
-    def forward(self, images, labels):
+    def forward(self, images, labels, bboxes=None):
 
         if not self.update_each_iteration:
-            adv_images = self.restart_forward(images, labels)
-            return adv_images
+            adv_images = self.restart_forward(images, labels, bboxes)
+            if self.yolo:
+                return self.loss_obj.losses, adv_images
+            else:
+                return adv_images
         else:
-            adv_images = self.iterative_forward(images, labels)
-            return adv_images
+            adv_images = self.iterative_forward(images, labels, bboxes)
+            if self.yolo:
+                return self.loss_obj.losses, adv_images
+            else:
+                return adv_images
 
-    def restart_forward(self, images, labels):
+    def restart_forward(self, images, labels, bboxes=None):
         if len(images.shape) == 3:
             images = images.unsqueeze(0)
 
@@ -128,19 +139,27 @@ class Pixle(Attack):
 
         images = images.clone().detach().to(self.device)
         labels = labels.clone().detach().to(self.device)
+        if bboxes != None:
+            bboxes = bboxes.clone().detach().to(self.device)
 
         bs, _, _, _ = images.shape
 
         for idx in range(bs):
             image, label = images[idx : idx + 1], labels[idx : idx + 1]
+            if bboxes != None:
+                bbox = bboxes[idx : idx + 1]
+            else:
+                bbox = None
+            # print('print2', type(image), type(label))
 
             best_image = image.clone()
             pert_image = image.clone()
 
-            loss, callback = self._get_fun(image, label, target_attack=self.targeted)
-            best_solution = None
-
+            loss, callback = self._get_fun(image, label, bbox=bbox, target_attack=self.targeted)
             best_p = loss(solution=image, solution_as_perturbed=True)
+
+            best_solution = None
+            
             image_probs = [best_p]
 
             it = 0
@@ -159,7 +178,7 @@ class Pixle(Attack):
                     )
 
                     solution = [x, y, x_offset, y_offset] + destinations
-
+                    
                     pert_image = self._perturb(
                         source=image, destination=best_image, solution=solution
                     )
@@ -191,7 +210,7 @@ class Pixle(Attack):
 
         return adv_images
 
-    def iterative_forward(self, images, labels):
+    def iterative_forward(self, images, labels, bboxes=None):
         assert len(images.shape) == 3 or (
             len(images.shape) == 4 and images.size(0) == 1
         )
@@ -220,17 +239,21 @@ class Pixle(Attack):
 
         images = images.clone().detach().to(self.device)
         labels = labels.clone().detach().to(self.device)
+        if bboxes != None:
+            bboxes = bboxes.clone().detach().to(self.device)
 
         bs, _, _, _ = images.shape
 
         for idx in range(bs):
             image, label = images[idx : idx + 1], labels[idx : idx + 1]
-
+            if bboxes != None:
+                bbox = bboxes[idx : idx + 1]
+            # print('print1', type(image), type(label))
             best_image = image.clone()
 
-            loss, callback = self._get_fun(image, label, target_attack=self.targeted)
-
+            loss, callback = self._get_fun(image, label, bbox=bbox, target_attack=self.targeted)
             best_p = loss(solution=image, solution_as_perturbed=True)
+
             image_probs = [best_p]
 
             for it in range(self.max_patches):
@@ -266,14 +289,18 @@ class Pixle(Attack):
         adv_images = torch.cat(adv_images)
 
         return adv_images
-
+    
     def _get_prob(self, image):
         out = self.get_logits(image.to(self.device))
         prob = softmax(out, dim=1)
         return prob.detach().cpu().numpy()
-
+    
+    def _get_yolo_prob(self, image, labels, bboxes):
+        _,out = self.loss_obj.compute_loss(image, labels, bboxes, 0, get_logits=True)
+        prob = softmax(out, dim=1)
+        return prob.detach().cpu().numpy()
+    
     def loss(self, img, label, target_attack=False):
-
         p = self._get_prob(img)
         p = p[np.arange(len(p)), label]
 
@@ -358,7 +385,7 @@ class Pixle(Attack):
 
         return destinations
 
-    def _get_fun(self, img, label, target_attack=False):
+    def _get_fun(self, img, label, bbox=None, target_attack=False):
         img = img.to(self.device)
 
         if isinstance(label, torch.Tensor):
@@ -374,12 +401,17 @@ class Pixle(Attack):
             else:
                 pert_image = solution
 
-            p = self._get_prob(pert_image)
-            p = p[np.arange(len(p)), label]
+            if self.yolo:
+                n_label = torch.from_numpy(label).to(self.device, non_blocking=False)
+                p = self._get_yolo_prob(pert_image, n_label, bbox)
+            else:
+                p = self._get_prob(pert_image)
+            
+            p = p[np.arange(len(p)), label.astype(int)]
 
             if target_attack:
                 p = 1 - p
-
+            
             return p.sum()
 
         @torch.no_grad()
@@ -392,13 +424,17 @@ class Pixle(Attack):
             else:
                 pert_image = solution
 
-            p = self._get_prob(pert_image)[0]
+            if self.yolo:
+                n_label = torch.tensor(label)
+                p = self._get_yolo_prob(pert_image, n_label, bbox)[0]
+            else:
+                p = self._get_prob(pert_image)[0]
             mx = np.argmax(p)
 
             if target_attack:
-                return mx == label
+                return mx == label.astype(int)
             else:
-                return mx != label
+                return mx != label.astype(int)
 
         return func, callback
 
@@ -414,6 +450,7 @@ class Pixle(Attack):
         source_pixels = np.ix_(range(c), np.arange(y, y + yl), np.arange(x, x + xl))
 
         indexes = torch.tensor(destinations)
+        indexes = indexes[:, [1, 0]]
         destination = destination.clone().detach().to(self.device)
 
         s = source[0][source_pixels].view(c, -1)

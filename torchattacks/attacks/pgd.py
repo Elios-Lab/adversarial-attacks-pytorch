@@ -30,7 +30,7 @@ class PGD(Attack):
 
     """
 
-    def __init__(self, model, yolo, eps=8 / 255, alpha=2 / 255, steps=10, random_start=True):
+    def __init__(self, model, yolo=False, eps=8 / 255, alpha=2 / 255, steps=10, random_start=True):
         super().__init__("PGD", yolo, model)
         self.eps = eps
         self.alpha = alpha
@@ -40,7 +40,7 @@ class PGD(Attack):
         if self.yolo:
             self.loss_obj = YOLOv8DetectionLoss(model, max_steps=steps)
 
-    def forward(self, images, bboxes, labels):
+    def forward(self, images, labels, bboxes=None):
         r"""
         Overridden.
         """
@@ -67,7 +67,7 @@ class PGD(Attack):
             adv_images.requires_grad = True
             if not self.yolo:
                 outputs = self.get_logits(adv_images)
-
+                          
             # Calculate loss
             if self.targeted:
                 if self.yolo:
@@ -77,6 +77,7 @@ class PGD(Attack):
             else:
                 if self.yolo:
                     cost = self.loss_obj.compute_loss(adv_images, labels, bboxes, _, requires_grad=True)
+                    # print(self.loss_obj.get_logits())
                 else:
                     cost = loss(outputs, labels)
 
@@ -89,4 +90,7 @@ class PGD(Attack):
             delta = torch.clamp(adv_images - images, min=-self.eps, max=self.eps)
             adv_images = torch.clamp(images + delta, min=0, max=1).detach()
         
-        return self.loss_obj.losses, adv_images
+        if self.yolo:
+            return self.loss_obj.losses, adv_images
+        else:   
+            return adv_images

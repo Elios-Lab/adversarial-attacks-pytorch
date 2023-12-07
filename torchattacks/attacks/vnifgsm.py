@@ -48,7 +48,7 @@ class VNIFGSM(Attack):
         if self.yolo:
             self.loss_obj = YOLOv8DetectionLoss(model, max_steps=steps)
 
-    def forward(self, images, bboxes, labels):
+    def forward(self, images, labels, bboxes=None):
         r"""
         Overridden.
         """
@@ -125,4 +125,7 @@ class VNIFGSM(Attack):
             delta = torch.clamp(adv_images - images, min=-self.eps, max=self.eps)
             adv_images = torch.clamp(images + delta, min=0, max=1).detach()
 
-        return self.loss_obj.losses, adv_images
+        if self.yolo:
+            return self.loss_obj.losses, adv_images
+        else:
+            return adv_images

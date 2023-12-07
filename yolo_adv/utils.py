@@ -62,12 +62,15 @@ class YOLOv8DetectionLoss():
         self.det_model.criterion.proj = self.det_model.criterion.proj.to(device='cuda', non_blocking=True)
         self.losses = np.zeros(max_steps)
         
-    def compute_loss(self, image, cls, box, step, requires_grad=False, save_loss=True):
+    def compute_loss(self, image, cls, box, step, get_logits=False, requires_grad=False, save_loss=True):
         batch = {'batch_idx': torch.randn_like(cls).to(device='cuda', non_blocking=True) ,'img': image.to(device='cuda', non_blocking=True),\
-            'cls': cls.to(device='cuda', non_blocking=True) ,'bboxes': box.to(device='cuda', non_blocking=True)}        
-        
-        tloss, _ = self.det_model.loss(preds=None, batch=batch)
+            'cls': cls.to(device='cuda', non_blocking=True) ,'bboxes': box.to(device='cuda', non_blocking=True)}  
+                        
+        tloss, _, logits = self.det_model.loss(preds=None, batch=batch)
         if save_loss:
             self.losses[step] = tloss.item()
         tloss.requires_grad_(requires_grad)
-        return tloss
+        if get_logits:
+            return tloss, logits
+        else:
+            return tloss

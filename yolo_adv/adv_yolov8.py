@@ -3,7 +3,7 @@ from PIL import Image
 from ultralytics import YOLO
 from torchvision import transforms
 from utils import YOLOv8Dataloader
-from torchattacks import PGD, FGSM, FFGSM, VNIFGSM
+from torchattacks import PGD, FGSM, FFGSM, VNIFGSM, Pixle
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 import argparse
@@ -81,14 +81,16 @@ if __name__ == '__main__':
     model.to(device='cuda', non_blocking=True)
     model.training = False
 
-    if args.atk_type == 'PGD':
-        atk = PGD(model=model, yolo=True, eps=0.024, steps=args.steps)
-    elif args.atk_type == 'FGSM':
-        atk = FGSM(model=model, yolo=True, eps=0.024)
-    elif args.atk_type == 'FFGSM':
-        atk = FFGSM(model=model, yolo=True, eps=0.024, alpha=0.055)
-    elif args.atk_type == 'VNIFGSM':
-        atk = VNIFGSM(model=model, yolo=True, eps=0.024, alpha=0.05, steps=args.steps, decay=1.0, N=5, beta=3/2)
+    # if args.atk_type == 'PGD':
+    #     atk = PGD(model=model, yolo=True, eps=0.024, steps=args.steps)
+    # elif args.atk_type == 'FGSM':
+    #     atk = FGSM(model=model, yolo=True, eps=0.024)
+    # elif args.atk_type == 'FFGSM':
+    #     atk = FFGSM(model=model, yolo=True, eps=0.024, alpha=0.055)
+    # elif args.atk_type == 'VNIFGSM':
+    #     atk = VNIFGSM(model=model, yolo=True, eps=0.024, alpha=0.05, steps=args.steps, decay=1.0, N=5, beta=3/2)
+    # elif args.atk_type == 'PIXLE':
+    atk = Pixle(model, yolo=True, x_dimensions=(0.1, 0.2), restarts=20, max_iterations=100, update_each_iteration=True)
     
     # Create the dataset
     dataset = YOLOv8Dataloader(images_dir=f'{args.input_data_dir}/images', annotations_dir=f'{args.input_data_dir}/labels', transform=None)
@@ -99,7 +101,7 @@ if __name__ == '__main__':
    
     for i, data in tqdm(enumerate(data_loader), total=dl_len, desc=f"Running {atk.__repr__().split('(')[0]} Attack"):
         yolo_output = []
-        loss, adv_img = atk(data[0]['image'], data[0]['boxes'], data[0]['classes'])
+        loss, adv_img = atk(data[0]['image'], data[0]['classes'], data[0]['boxes'])
     
         inference_img = transform(data[0]['image'][0].detach().clone())
         adv_img = transform(adv_img[0].detach().clone())
@@ -111,7 +113,7 @@ if __name__ == '__main__':
             im = Image.fromarray(im_array[..., ::-1])
             yolo_output.append(im)
 
-        if args.plot == False:
+        if args.plot:
             if atk.__repr__().split('(')[0] == "PGD" or atk.__repr__().split('(')[0] == "VNIFGSM":
                 plot_loss(dl_len, yolo_output, i*3, 3, atk)
             else:
@@ -123,9 +125,9 @@ if __name__ == '__main__':
             if not args.save_inference:
                 break
 
-        adv_img.save(f'{args.output_data_dir}/adv_img/{i}.png')
+        adv_img.save(f'{args.output_data_dir}/adv_img/{atk.__repr__().split("(")[0]}_{i}.png')
         if args.save_inference:
             for idx, output in enumerate(yolo_output):
-                output.save(f'{args.output_data_dir}/{directories[idx+1]}/{i}.png')
+                output.save(f'{args.output_data_dir}/{directories[idx+1]}/{atk.__repr__().split("(")[0]}_{i}.png')
             
     plt.show()
