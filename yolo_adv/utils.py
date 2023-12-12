@@ -54,7 +54,6 @@ class YOLOv8Dataloader(Dataset):
 
         return sample
 
-
 class YOLOv8DetectionLoss():
     def __init__(self, model, max_steps):
         self.model = model
@@ -65,11 +64,13 @@ class YOLOv8DetectionLoss():
     def compute_loss(self, image, cls, box, step, get_logits=False, requires_grad=False, save_loss=True):
         batch = {'batch_idx': torch.randn_like(cls).to(device='cuda', non_blocking=True) ,'img': image.to(device='cuda', non_blocking=True),\
             'cls': cls.to(device='cuda', non_blocking=True) ,'bboxes': box.to(device='cuda', non_blocking=True)}  
-                        
+                                
         tloss, _, logits = self.det_model.loss(preds=None, batch=batch)
         if save_loss:
             self.losses[step] = tloss.item()
-        tloss.requires_grad_(requires_grad)
+        if requires_grad:
+            tloss.requires_grad_(requires_grad)
+            logits.requires_grad_(requires_grad)
         if get_logits:
             return tloss, logits
         else:

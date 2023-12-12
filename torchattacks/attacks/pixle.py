@@ -6,7 +6,6 @@ from torch.nn.functional import softmax
 
 from ..attack import Attack
 from yolo_adv.utils import YOLOv8DetectionLoss
-from tqdm import tqdm
 
 class Pixle(Attack):
     r"""
@@ -150,7 +149,6 @@ class Pixle(Attack):
                 bbox = bboxes[idx : idx + 1]
             else:
                 bbox = None
-            # print('print2', type(image), type(label))
 
             best_image = image.clone()
             pert_image = image.clone()
@@ -248,7 +246,6 @@ class Pixle(Attack):
             image, label = images[idx : idx + 1], labels[idx : idx + 1]
             if bboxes != None:
                 bbox = bboxes[idx : idx + 1]
-            # print('print1', type(image), type(label))
             best_image = image.clone()
 
             loss, callback = self._get_fun(image, label, bbox=bbox, target_attack=self.targeted)

@@ -3,7 +3,7 @@ from PIL import Image
 from ultralytics import YOLO
 from torchvision import transforms
 from utils import YOLOv8Dataloader
-from torchattacks import PGD, FGSM, FFGSM, VNIFGSM, Pixle
+from torchattacks import PGD, FGSM, FFGSM, VNIFGSM, Pixle, DeepFool
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 import argparse
@@ -81,16 +81,18 @@ if __name__ == '__main__':
     model.to(device='cuda', non_blocking=True)
     model.training = False
 
-    # if args.atk_type == 'PGD':
-    #     atk = PGD(model=model, yolo=True, eps=0.024, steps=args.steps)
-    # elif args.atk_type == 'FGSM':
-    #     atk = FGSM(model=model, yolo=True, eps=0.024)
-    # elif args.atk_type == 'FFGSM':
-    #     atk = FFGSM(model=model, yolo=True, eps=0.024, alpha=0.055)
-    # elif args.atk_type == 'VNIFGSM':
-    #     atk = VNIFGSM(model=model, yolo=True, eps=0.024, alpha=0.05, steps=args.steps, decay=1.0, N=5, beta=3/2)
-    # elif args.atk_type == 'PIXLE':
-    atk = Pixle(model, yolo=True, x_dimensions=(0.1, 0.2), restarts=20, max_iterations=100, update_each_iteration=True)
+    if args.atk_type == 'PGD':
+        atk = PGD(model=model, yolo=True, eps=0.024, steps=args.steps)
+    elif args.atk_type == 'FGSM':
+        atk = FGSM(model=model, yolo=True, eps=0.024)
+    elif args.atk_type == 'FFGSM':
+        atk = FFGSM(model=model, yolo=True, eps=0.024, alpha=0.055)
+    elif args.atk_type == 'VNIFGSM':
+        atk = VNIFGSM(model=model, yolo=True, eps=0.024, alpha=0.05, steps=args.steps, decay=1.0, N=5, beta=3/2)
+    elif args.atk_type == 'PIXLE':
+        atk = Pixle(model, yolo=True, x_dimensions=(0.1, 0.2), restarts=20, max_iterations=100, update_each_iteration=True)
+    elif args.atk_type == 'DEEPFOOL':
+        atk = DeepFool(model, yolo=True, steps=2500, overshoot=0.2)
     
     # Create the dataset
     dataset = YOLOv8Dataloader(images_dir=f'{args.input_data_dir}/images', annotations_dir=f'{args.input_data_dir}/labels', transform=None)

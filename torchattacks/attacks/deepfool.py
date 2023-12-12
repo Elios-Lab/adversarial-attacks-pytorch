@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from ..attack import Attack
-
+from yolo_adv.utils import YOLOv8DetectionLoss
 
 class DeepFool(Attack):
     r"""
@@ -22,20 +22,26 @@ class DeepFool(Attack):
         >>> adv_images = attack(images, labels)
     """
 
-    def __init__(self, model, steps=50, overshoot=0.02):
-        super().__init__("DeepFool", model)
+    def __init__(self, model, yolo=False, steps=50, overshoot=0.02):
+        super().__init__("DeepFool", yolo, model)
         self.steps = steps
         self.overshoot = overshoot
         self.supported_mode = ["default"]
+        self.yolo = yolo
+        if self.yolo:
+            self.loss_obj = YOLOv8DetectionLoss(model, max_steps=self.steps)
 
-    def forward(self, images, labels):
+    def forward(self, images, labels, bboxes=None):
         r"""
         Overridden.
         """
-        adv_images, target_labels = self.forward_return_target_labels(images, labels)
-        return adv_images
+        adv_images, target_labels = self.forward_return_target_labels(images, labels, bboxes)
+        if self.yolo:
+            return self.loss_obj.losses, adv_images
+        else:
+            return adv_images
 
-    def forward_return_target_labels(self, images, labels):
+    def forward_return_target_labels(self, images, labels, bboxes=None):
         r"""
         Overridden.
         """
@@ -57,7 +63,7 @@ class DeepFool(Attack):
                 if not correct[idx]:
                     continue
                 early_stop, pre, adv_image = self._forward_indiv(
-                    adv_images[idx], labels[idx]
+                    adv_images[idx], labels[idx], curr_steps, torch.unsqueeze(bboxes[idx], 0) if bboxes is not None else None
                 )
                 adv_images[idx] = adv_image
                 target_labels[idx] = pre
@@ -68,15 +74,20 @@ class DeepFool(Attack):
         adv_images = torch.cat(adv_images).detach()
         return adv_images, target_labels
 
-    def _forward_indiv(self, image, label):
+    def _forward_indiv(self, image, label, step, bboxes=None):
         image.requires_grad = True
-        fs = self.get_logits(image)[0]
+        if self.yolo:
+            _,fs = self.loss_obj.compute_loss(image, label, bboxes, step, requires_grad=True, get_logits=True)
+            fs = fs[0][0]
+        else:
+            fs = self.get_logits(image)[0]
         _, pre = torch.max(fs, dim=0)
         if pre != label:
             return (True, pre, image)
 
         ws = self._construct_jacobian(fs, image)
         image = image.detach()
+        label = label.int()
 
         f_0 = fs[label]
         w_0 = ws[label]
