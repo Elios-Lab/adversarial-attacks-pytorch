@@ -63,15 +63,15 @@ if __name__ == '__main__':
     
     argparser.add_argument('--plot',
                             '-p',
+                            action='store_true',
                             default=False,
-                            type=bool,
                             help='plot results (default: False)')
     
     argparser.add_argument('--save_inference',
                            '-si',
-                           default=True,
-                           type=bool,
-                           help='choose wheter to save inference results for both normal and adversarial images (default: True)')
+                           action='store_true',
+                           default=False,
+                           help='choose wheter to save inference results for both normal and adversarial images (default: False)')
     
     args = argparser.parse_args()
     
@@ -98,9 +98,10 @@ if __name__ == '__main__':
     dataset = YOLOv8Dataloader(images_dir=f'{args.input_data_dir}/images', annotations_dir=f'{args.input_data_dir}/labels', transform=None)
  
     # Create the DataLoader
-    data_loader = DataLoader(dataset, shuffle=True, collate_fn=lambda x: x)
+    data_loader = DataLoader(dataset, shuffle=False, collate_fn=lambda x: x)
     dl_len = len(data_loader)
    
+     
     for i, data in tqdm(enumerate(data_loader), total=dl_len, desc=f"Running {atk.__repr__().split('(')[0]} Attack"):
         yolo_output = []
         loss, adv_img = atk(data[0]['image'], data[0]['classes'], data[0]['boxes'])
@@ -124,12 +125,13 @@ if __name__ == '__main__':
         directories = ['adv_img', 'norm_inf', 'adv_inf']
         for directory in directories:
             os.makedirs(f'{args.output_data_dir}/{directory}/', exist_ok=True)
+            os.makedirs(f'{args.output_data_dir}/{directory}/{atk.__repr__().split("(")[0]}/', exist_ok=True)
             if not args.save_inference:
                 break
-
-        adv_img.save(f'{args.output_data_dir}/adv_img/{atk.__repr__().split("(")[0]}_{i}.png')
+        
+        adv_img.save(f'{args.output_data_dir}/adv_img/{atk.__repr__().split("(")[0]}/{i}.png')
         if args.save_inference:
             for idx, output in enumerate(yolo_output):
-                output.save(f'{args.output_data_dir}/{directories[idx+1]}/{atk.__repr__().split("(")[0]}_{i}.png')
+                output.save(f'{args.output_data_dir}/{directories[idx+1]}/{atk.__repr__().split("(")[0]}/{i}.png')
             
     plt.show()

@@ -63,10 +63,10 @@ class DeepFool(Attack):
                 if not correct[idx]:
                     continue
                 early_stop, pre, adv_image = self._forward_indiv(
-                    adv_images[idx], labels[idx], curr_steps, torch.unsqueeze(bboxes[idx], 0) if bboxes is not None else None
+                    adv_images[idx], labels[idx : idx + 1], curr_steps, torch.unsqueeze(bboxes[idx], 0) if len(bboxes) != 0 else bboxes
                 )
                 adv_images[idx] = adv_image
-                target_labels[idx] = pre
+                target_labels[idx : idx + 1] = pre
                 if early_stop:
                     correct[idx] = False
             curr_steps += 1
@@ -82,6 +82,11 @@ class DeepFool(Attack):
         else:
             fs = self.get_logits(image)[0]
         _, pre = torch.max(fs, dim=0)
+        
+        label = label.to(torch.int64)
+        if len(label) == 0:
+            return (True, pre, image)
+
         if pre != label:
             return (True, pre, image)
 
