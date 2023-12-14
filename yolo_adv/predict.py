@@ -4,13 +4,10 @@ import cv2
 
 model = YOLO('yolo_adv/best.pt')
 
-# img = cv2.imread('filtered/PGD_0.png')
-# cv2.imwrite('filtered/PGD_0.jpg', img)
-       
-results = model('/home/pigo/projects/adversarial-attacks-pytorch/yolo_adv/adv_data/norm/images/dayClip7--00930.jpg', verbose=False)
-print(results[0].boxes.conf)
-print(results[0].boxes.cls)
-# for r in results:
-#     im_array = r.plot()
-#     im = Image.fromarray(im_array[..., ::-1])
-#     im.show()
+results = model.val(data='yolo_adv/data.yaml', imgsz=640)
+print('mAP50-95:', results.box.map)    # map50-95
+print('mAP50:', results.box.map50)  # map50
+print('mAP75:', results.box.map75)  # map75
+print('mAP for each class:', results.box.maps)  # a list contains map50-95 of each category
+print('Mean precision:', results.box.mp)  # mean precision
+print('Mean recall:', results.box.mr)

@@ -61,12 +61,12 @@ class FFGSM(Attack):
         # Calculate loss
         if self.targeted:
             if self.yolo:
-                cost = -self.loss_obj.compute_loss(adv_images, target_labels, bboxes, 0, requires_grad=True)
+                cost = -self.loss_obj.compute_loss(adv_images, target_labels, bboxes, 0)
             else:
                 cost = -loss(outputs, target_labels)
         else:
             if self.yolo:
-                cost = self.loss_obj.compute_loss(adv_images, labels, bboxes, 0, requires_grad=True)
+                cost = self.loss_obj.compute_loss(adv_images, labels, bboxes, 0)
             else:
                 cost = loss(outputs, labels)
 

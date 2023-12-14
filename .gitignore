@@ -16,7 +16,9 @@ _commit.bat
 yolo_adv/adv_data/*
 
 autoattack/*
-
+runs/*
+yolo_adv/classifier/train_data/*
+yolo_adv/classifier/test_data/*
 demo/_*
 demo/data/*
 demo/models/*

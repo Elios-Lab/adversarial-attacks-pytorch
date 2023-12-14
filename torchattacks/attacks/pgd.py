@@ -71,12 +71,12 @@ class PGD(Attack):
             # Calculate loss
             if self.targeted:
                 if self.yolo:
-                    cost = -self.loss_obj.compute_loss(adv_images, target_labels, bboxes, _, requires_grad=True)
+                    cost = -self.loss_obj.compute_loss(adv_images, target_labels, bboxes, _)
                 else:
                     cost = -loss(outputs, target_labels)
             else:
                 if self.yolo:
-                    cost = self.loss_obj.compute_loss(adv_images, labels, bboxes, _, requires_grad=True)
+                    cost = self.loss_obj.compute_loss(adv_images, labels, bboxes, _)
                     # print(self.loss_obj.get_logits())
                 else:
                     cost = loss(outputs, labels)

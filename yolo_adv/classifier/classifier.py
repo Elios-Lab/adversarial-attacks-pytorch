@@ -66,9 +66,10 @@ class Classifier():
             ckpt_period = epochs + 1
             checkpoint_path = None
         else:
-            checkpoint_path = os.makedirs(f'yolo_adv/classifier/runs/{self.exp_name}/ckpts', exist_ok=True)  # Create the checkpoint directory if it doesn't exist
+            checkpoint_path = f'./yolo_adv/classifier/runs/{self.exp_name}/ckpts'
+            os.makedirs(checkpoint_path, exist_ok=True)  # Create the checkpoint directory if it doesn't exist
 
-        self.writer = self.setup_tensorboard_run(f'yolo_adv/classifier/runs/{self.exp_name}/logging')
+        self.writer = self.setup_tensorboard_run(f'./yolo_adv/classifier/runs/{self.exp_name}/logging')
         # Loss and optimizer
         criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
@@ -90,7 +91,7 @@ class Classifier():
                     tepoch.set_postfix(loss=loss_value)
 
             print(f"Epoch [{self.current_epoch}/{epochs}], Loss: {loss_value:.4f}")
-            if self.current_epoch > 0:
+            if self.current_epoch > 0 or valid_period == 1:
                 if self.current_epoch % valid_period == 0:
                     val_loss = self.validate(criterion)
                     self.writer.add_scalar('Loss/val', val_loss, self.current_epoch)
@@ -99,7 +100,7 @@ class Classifier():
                     torch.save(self.model.state_dict(), f'{checkpoint_path}/{self.current_epoch}.pt')
             
         self.writer.close()
-        torch.save(self.model.state_dict(), f'yolo_adv/classifier/runs/{self.exp_name}/last.pt')
+        torch.save(self.model.state_dict(), f'./yolo_adv/classifier/runs/{self.exp_name}/last.pt')
             
     def validate(self, criterion):
         self.model.eval()  # Set the model to evaluation mode
@@ -242,7 +243,7 @@ class Classifier():
             'epoch': self.current_epoch,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict()
-        }, f'yolo_adv/classifier/runs/{self.exp_name}/{filename}')
+        }, f'./yolo_adv/classifier/runs/{self.exp_name}/{filename}')
         
     def signal_handler(self, signal_received, frame):
         self.save_checkpoint_on_interrupt()

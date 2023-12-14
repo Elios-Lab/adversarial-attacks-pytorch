@@ -496,7 +496,7 @@ class Attack(object):
 
         return target_labels.long().to(self.device)
 
-    def __call__(self, inputs, bboxes=None, labels=None, *args, **kwargs):
+    def __call__(self, inputs, labels=None, bboxes=None, *args, **kwargs):
         if not self.yolo:
             given_training = self.model.training
             self._change_model_mode(given_training)
@@ -504,14 +504,13 @@ class Attack(object):
         if self._normalization_applied is True:
             inputs = self.inverse_normalize(inputs)
             self._set_normalization_applied(False)
-
-            adv_inputs = self.forward(inputs, bboxes, labels, *args, **kwargs)
+            adv_inputs = self.forward(inputs, labels, bboxes, *args, **kwargs)
             # adv_inputs = self.to_type(adv_inputs, self.return_type)
 
             adv_inputs = self.normalize(adv_inputs)
             self._set_normalization_applied(True)
         else:
-            adv_inputs = self.forward(inputs, bboxes, labels, *args, **kwargs)
+            adv_inputs = self.forward(inputs, labels, bboxes, *args, **kwargs)
             # adv_inputs = self.to_type(adv_inputs, self.return_type)
 
         if not self.yolo:

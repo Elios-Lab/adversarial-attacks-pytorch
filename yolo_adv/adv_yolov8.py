@@ -3,7 +3,7 @@ from PIL import Image
 from ultralytics import YOLO
 from torchvision import transforms
 from utils import YOLOv8Dataloader
-from torchattacks import PGD, FGSM, FFGSM, VNIFGSM, Pixle, DeepFool
+from torchattacks import PGD, FGSM, FFGSM, VNIFGSM, Pixle, DeepFool, Square
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 import argparse
@@ -100,12 +100,12 @@ if __name__ == '__main__':
     # Create the DataLoader
     data_loader = DataLoader(dataset, shuffle=False, collate_fn=lambda x: x)
     dl_len = len(data_loader)
-   
      
     for i, data in tqdm(enumerate(data_loader), total=dl_len, desc=f"Running {atk.__repr__().split('(')[0]} Attack"):
+
         yolo_output = []
         loss, adv_img = atk(data[0]['image'], data[0]['classes'], data[0]['boxes'])
-    
+            
         inference_img = transform(data[0]['image'][0].detach().clone())
         adv_img = transform(adv_img[0].detach().clone())
                 
@@ -126,12 +126,13 @@ if __name__ == '__main__':
         for directory in directories:
             os.makedirs(f'{args.output_data_dir}/{directory}/', exist_ok=True)
             os.makedirs(f'{args.output_data_dir}/{directory}/{atk.__repr__().split("(")[0]}/', exist_ok=True)
+            os.makedirs(f'{args.output_data_dir}/{directory}/{atk.__repr__().split("(")[0]}/images/', exist_ok=True)
             if not args.save_inference:
                 break
         
-        adv_img.save(f'{args.output_data_dir}/adv_img/{atk.__repr__().split("(")[0]}/{i}.png')
+        adv_img.save(f'{args.output_data_dir}/adv_img/{atk.__repr__().split("(")[0]}/images/{data[0]["image_name"]}.png')
         if args.save_inference:
             for idx, output in enumerate(yolo_output):
-                output.save(f'{args.output_data_dir}/{directories[idx+1]}/{atk.__repr__().split("(")[0]}/{i}.png')
+                output.save(f'{args.output_data_dir}/{directories[idx+1]}/{atk.__repr__().split("(")[0]}/{data[0]["image_name"]}.png')
             
     plt.show()

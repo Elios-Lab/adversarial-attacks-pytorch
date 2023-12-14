@@ -47,7 +47,7 @@ class YOLOv8Dataloader(Dataset):
             boxes = torch.zeros((0, 4))
             classes = torch.zeros((0, 1))
         
-        sample = {'image': image, 'classes': classes, 'boxes': boxes}
+        sample = {'image': image, 'classes': classes, 'boxes': boxes, 'image_name': os.path.splitext(os.path.basename(img_name))[0]}
 
         if self.transform:
             sample = self.transform(sample)
@@ -61,16 +61,16 @@ class YOLOv8DetectionLoss():
         self.det_model.criterion.proj = self.det_model.criterion.proj.to(device='cuda', non_blocking=True)
         self.losses = np.zeros(max_steps)
         
-    def compute_loss(self, image, cls, box, step, get_logits=False, requires_grad=False, save_loss=True):
+    def compute_loss(self, image, cls, box, step, get_logits=False, save_loss=True):
+        
         batch = {'batch_idx': torch.randn_like(cls).to(device='cuda', non_blocking=True) ,'img': image.to(device='cuda', non_blocking=True),\
-            'cls': cls.to(device='cuda', non_blocking=True) ,'bboxes': box.to(device='cuda', non_blocking=True)}  
-                                
+            'cls': cls.to(device='cuda', non_blocking=True) ,'bboxes': box.to(device='cuda', non_blocking=True)}
+                                        
         tloss, _, logits = self.det_model.loss(preds=None, batch=batch)
+        
         if save_loss:
             self.losses[step] = tloss.item()
-        if requires_grad:
-            tloss.requires_grad_(requires_grad)
-            logits.requires_grad_(requires_grad)
+
         if get_logits:
             return tloss, logits
         else:

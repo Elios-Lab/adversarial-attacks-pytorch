@@ -74,12 +74,12 @@ class VNIFGSM(Attack):
             # Calculate loss
             if self.targeted:
                 if self.yolo:
-                    cost = -self.loss_obj.compute_loss(nes_images, target_labels, bboxes, _, requires_grad=True)
+                    cost = -self.loss_obj.compute_loss(nes_images, target_labels, bboxes, _)
                 else:
                     cost = -loss(outputs, target_labels)
             else:
                 if self.yolo:
-                    cost = self.loss_obj.compute_loss(nes_images, labels, bboxes, _, requires_grad=True)
+                    cost = self.loss_obj.compute_loss(nes_images, labels, bboxes, _)
                 else:      
                     cost = loss(outputs, labels)
 
@@ -107,12 +107,12 @@ class VNIFGSM(Attack):
                 # Calculate loss
                 if self.targeted:
                     if self.yolo:
-                        cost = -self.loss_obj.compute_loss(neighbor_images, target_labels, bboxes, _, requires_grad=True)
+                        cost = -self.loss_obj.compute_loss(neighbor_images, target_labels, bboxes, _)
                     else:
                         cost = -loss(outputs, target_labels)
                 else:
                     if self.yolo:
-                        cost = self.loss_obj.compute_loss(neighbor_images, labels, bboxes, _, requires_grad=True)
+                        cost = self.loss_obj.compute_loss(neighbor_images, labels, bboxes, _)
                     else:      
                         cost = loss(outputs, labels)
                 GV_grad += torch.autograd.grad(
