@@ -69,7 +69,7 @@ class Classifier():
             checkpoint_path = f'./yolo_adv/classifier/runs/{self.exp_name}/ckpts'
             os.makedirs(checkpoint_path, exist_ok=True)  # Create the checkpoint directory if it doesn't exist
 
-        self.writer = self.setup_tensorboard_run(f'./yolo_adv/classifier/runs/{self.exp_name}/logging')
+        self.writer = self.setup_tensorboard_run(f'yolo_adv/classifier/runs/{self.exp_name}/tb_logs')
         # Loss and optimizer
         criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
