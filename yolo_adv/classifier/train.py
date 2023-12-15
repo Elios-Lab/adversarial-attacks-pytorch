@@ -6,3 +6,4 @@ if __name__ == "__main__":
     model.load_dataset(root=data_path, normalize=True, batch_size=16, shuffle=True)
     model.train(epochs=15, lr=0.001, valid_period=1, ckpt_period=5)
     model.evaluate()
+    

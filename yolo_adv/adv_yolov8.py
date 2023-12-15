@@ -82,20 +82,27 @@ if __name__ == '__main__':
     model.training = False
 
     if args.atk_type == 'PGD':
+        norm_path = 'PGD'
         atk = PGD(model=model, yolo=True, eps=0.024, steps=args.steps)
     elif args.atk_type == 'FGSM':
         atk = FGSM(model=model, yolo=True, eps=0.024)
     elif args.atk_type == 'FFGSM':
+        norm_path = 'F-FGSM'
         atk = FFGSM(model=model, yolo=True, eps=0.024, alpha=0.055)
     elif args.atk_type == 'VNIFGSM':
+        norm_path = 'VNI-FGSM'
         atk = VNIFGSM(model=model, yolo=True, eps=0.024, alpha=0.05, steps=args.steps, decay=1.0, N=5, beta=3/2)
     elif args.atk_type == 'PIXLE':
+        norm_path = 'Pixle'
         atk = Pixle(model, yolo=True, x_dimensions=(0.1, 0.2), restarts=20, max_iterations=100, update_each_iteration=True)
     elif args.atk_type == 'DEEPFOOL':
+        norm_path = 'DeepFool'
         atk = DeepFool(model, yolo=True, steps=2500, overshoot=0.2)
     
+    
+    
     # Create the dataset
-    dataset = YOLOv8Dataloader(images_dir=f'{args.input_data_dir}/images', annotations_dir=f'{args.input_data_dir}/labels', transform=None)
+    dataset = YOLOv8Dataloader(images_dir=f'{args.input_data_dir}/{norm_path}/images', annotations_dir=f'{args.input_data_dir}/{norm_path}/labels', transform=None)
  
     # Create the DataLoader
     data_loader = DataLoader(dataset, shuffle=False, collate_fn=lambda x: x)
@@ -130,7 +137,7 @@ if __name__ == '__main__':
             if not args.save_inference:
                 break
         
-        adv_img.save(f'{args.output_data_dir}/adv_img/{atk.__repr__().split("(")[0]}/images/{data[0]["image_name"]}.png')
+        adv_img.save(f'{args.output_data_dir}/adv_img/{atk.__repr__().split("(")[0]}/images/{data[0]["image_name"]}_{atk.__repr__().split("(")[0]}.png')
         if args.save_inference:
             for idx, output in enumerate(yolo_output):
                 output.save(f'{args.output_data_dir}/{directories[idx+1]}/{atk.__repr__().split("(")[0]}/{data[0]["image_name"]}.png')

@@ -13,7 +13,7 @@ class FrameSequence:
         self.current_index = 0
         # Initialize the array of attacks to all zeros
         self.attack_indices = np.zeros(len(self.frames))
-        self.attack_mapping = {'None': 0, 'PGD': 1, 'FGSM': 2, 'F-FGSM': 3, 'VNI-FGSM': 4, 'Pixle': 5, 'DeepFool': 6}
+        self.attack_mapping = {'None': 0, 'PGD': 1, 'F-FGSM': 2, 'VNI-FGSM': 3, 'Pixle': 4, 'DeepFool': 5}
         # Update the array based on image file names
         for i, frame in enumerate(self.frames):
             for keyword, index in self.attack_mapping.items():
@@ -99,7 +99,6 @@ if __name__ == "__main__":
     ax.set_ylabel('Attack Type')
     ax.grid()
     plt.show()
-    
     
     fig, ax = plt.subplots(figsize=(7.5, 3))
     ax.step(range(len(fc_history)), fc_history, where='post', color='blue')
