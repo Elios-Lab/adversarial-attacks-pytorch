@@ -150,7 +150,7 @@ class Classifier():
         self.model.eval()  # Set the model to evaluation mode
         self.model.to(device)  # Move the model to the appropriate device
         
-    def predict(self, image_path):
+    def predict(self, image_path=None, image:Image=None):
         """
         Perform inference on the input data using the trained model.
 
@@ -161,7 +161,7 @@ class Classifier():
         Returns:
         The output predictions from the model.
         """
-        image = self.process_image(image_path=image_path)        
+        image = self.process_image(image_path=image_path, image=image)      
         self.model.eval()  # Set the model to evaluation mode
         # Check if GPU is available
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -201,10 +201,7 @@ class Classifier():
         accuracy = correct_predictions / total_predictions if total_predictions > 0 else 0
         return accuracy
         
-        
-        
-        
-    def process_image(self, image_path):
+    def process_image(self, image_path=None, image:Image=None):
         # Define the same transformations as used during training
         transform = transforms.Compose([
             transforms.Resize((224, 224)),  # Assuming you used this size during training
@@ -213,7 +210,10 @@ class Classifier():
         ])
 
         # Load the image
-        image = Image.open(image_path).convert('RGB')
+        if image:
+            image = image.convert('RGB')
+        else:
+            image = Image.open(image_path).convert('RGB')
 
         # Transform the image
         transformed_image = transform(image)
