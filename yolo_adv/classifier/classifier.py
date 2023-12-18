@@ -10,6 +10,7 @@ import os
 import shutil
 import signal
 from PIL import Image
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 
 class Classifier():
     def __init__(self):
@@ -93,8 +94,12 @@ class Classifier():
             print(f"Epoch [{self.current_epoch}/{epochs}], Loss: {loss_value:.4f}")
             if self.current_epoch > 0 or valid_period == 1:
                 if self.current_epoch % valid_period == 0:
-                    val_loss = self.validate(criterion)
+                    val_loss, accuracy, precision, recall, f1 = self.validate(criterion)
                     self.writer.add_scalar('Loss/val', val_loss, self.current_epoch)
+                    self.writer.add_scalar('Accuracy/val', accuracy, self.current_epoch)
+                    self.writer.add_scalar('Precision/val', precision, self.current_epoch)
+                    self.writer.add_scalar('Recall/val', recall, self.current_epoch)
+                    self.writer.add_scalar('F1/val', f1, self.current_epoch)
                     print(f"Validation loss: {val_loss:.4f}")
                 if self.current_epoch % ckpt_period == 0:
                     torch.save(self.model.state_dict(), f'{checkpoint_path}/{self.current_epoch}.pt')
@@ -106,16 +111,27 @@ class Classifier():
         self.model.eval()  # Set the model to evaluation mode
         total_loss = 0
         total_samples = 0
+        all_labels = []
+        all_predictions = []
 
         with torch.no_grad():
             for images, labels in self.valid_loader:
                 outputs = self.model(images)
+                _, predicted = torch.max(outputs.data, 1)
+                all_labels.extend(labels.tolist())
+                all_predictions.extend(predicted.tolist())
+
                 loss = criterion(outputs, labels)
                 total_loss += loss.item() * images.size(0)
                 total_samples += images.size(0)
 
         avg_loss = total_loss / total_samples
-        return avg_loss
+        accuracy = accuracy_score(all_labels, all_predictions)
+        precision = precision_score(all_labels, all_predictions)
+        recall = recall_score(all_labels, all_predictions)
+        f1 = f1_score(all_labels, all_predictions)
+        
+        return avg_loss, accuracy, precision, recall, f1
 
         
     def evaluate(self, valid_loader=None):
@@ -212,8 +228,10 @@ class Classifier():
         recall = true_positives / (true_positives + false_negatives) if true_positives + false_negatives > 0 else 0
         accuracy = true_positives / (true_positives + false_positives + false_negatives) if true_positives + false_positives + false_negatives > 0 else 0
 
+        f1_score = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0
+
         #accuracy = correct_predictions / total_predictions if total_predictions > 0 else 0
-        return accuracy, precision, recall
+        return accuracy, precision, recall, f1_score
         
     def process_image(self, image_path=None, image:Image=None):
         # Define the same transformations as used during training
