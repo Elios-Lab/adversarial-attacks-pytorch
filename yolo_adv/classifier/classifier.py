@@ -184,8 +184,12 @@ class Classifier():
         classes = list(self.class_names.values())
         assert actual_classes == classes, f"Subfolders must be named {classes}, but found {actual_classes}"
         
-        correct_predictions = 0
-        total_predictions = 0
+        #correct_predictions = 0
+        #total_predictions = 0
+
+        true_positives = 0
+        false_positives = 0
+        false_negatives = 0
 
         for class_name in tqdm(os.listdir(dataset_path)):
             class_path = os.path.join(dataset_path, class_name)
@@ -195,11 +199,21 @@ class Classifier():
                         img_path = os.path.join(class_path, img_file)
                         predicted_class = self.predict(img_path)
                         if predicted_class == class_name:
-                            correct_predictions += 1
-                        total_predictions += 1
+                            true_positives += 1
+                        else:
+                            false_positives += 1
+                            # if predicted_class not in os.listdir(dataset_path):
+                            #     false_negatives += 1
+                        # if predicted_class == class_name:
+                        #     correct_predictions += 1
+                        # total_predictions += 1
 
-        accuracy = correct_predictions / total_predictions if total_predictions > 0 else 0
-        return accuracy
+        precision = true_positives / (true_positives + false_positives) if true_positives + false_positives > 0 else 0
+        recall = true_positives / (true_positives + false_negatives) if true_positives + false_negatives > 0 else 0
+        accuracy = true_positives / (true_positives + false_positives + false_negatives) if true_positives + false_positives + false_negatives > 0 else 0
+
+        #accuracy = correct_predictions / total_predictions if total_predictions > 0 else 0
+        return accuracy, precision, recall
         
     def process_image(self, image_path=None, image:Image=None):
         # Define the same transformations as used during training
