@@ -58,7 +58,7 @@ class Classifier():
         self.valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=shuffle)        
 
     # Training function
-    def train(self, exp_name='exp', epochs=10, lr=0.001, valid_period=5, ckpt_period=None):
+    def train(self, exp_name='exp', epochs=10, lr=0.001, valid_period=5, ckpt_period=None, patience=None):
         self.exp_name = exp_name
         # Check if validation and checkpoint periods are valid
         if valid_period is None:
@@ -73,8 +73,13 @@ class Classifier():
         self.writer = self.setup_tensorboard_run(f'./yolo_adv/classifier/runs/{self.exp_name}/tb_logs')
         # Loss and optimizer
         criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=lr, weight_decay=1e-5)
         self.model.train()
+        
+        # Early stopping criteria
+        best_val_loss = float('inf')
+        patience_counter = 0
+        
         for self.current_epoch in tqdm(range(epochs)):
             with tqdm(self.train_loader, unit="batch", leave=False) as tepoch:
                 for i, (images, labels) in enumerate(tepoch):
@@ -101,6 +106,14 @@ class Classifier():
                     self.writer.add_scalar('Recall/val', recall, self.current_epoch)
                     self.writer.add_scalar('F1/val', f1, self.current_epoch)
                     print(f"Validation loss: {val_loss:.4f}")
+                    if val_loss < best_val_loss:
+                        best_val_loss = val_loss
+                        patience_counter = 0
+                    else:
+                        patience_counter += 1
+                        if patience is not None and patience_counter >= patience:
+                            print("Early stopping triggered")
+                            break
                 if self.current_epoch % ckpt_period == 0:
                     torch.save(self.model.state_dict(), f'{checkpoint_path}/{self.current_epoch}.pt')
             
@@ -196,7 +209,7 @@ class Classifier():
     
     # Function to evaluate the model on the dataset
     def evaluate_model_on_dataset(self, dataset_path):
-        actual_classes = sorted(os.listdir(dataset_path))
+        actual_classes = sorted([d for d in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, d))])
         classes = list(self.class_names.values())
         assert actual_classes == classes, f"Subfolders must be named {classes}, but found {actual_classes}"
         
@@ -255,17 +268,17 @@ class Classifier():
 
         return image_batch
         
-    def setup_tensorboard_run(self, run_name):
-        log_dir = os.path.join('runs', run_name)
-        if os.path.exists(log_dir):
-            user_input = input(f"The run '{run_name}' already exists. Overwrite? (y/n): ")
+    def setup_tensorboard_run(self, run_path):
+        # log_dir = os.path.join('runs', run_path)
+        if os.path.exists(run_path):
+            user_input = input(f"The run '{run_path}' already exists. Overwrite? (y/n): ")
             if user_input.lower() == 'y':
                 # Overwrite the existing run directory
-                shutil.rmtree(log_dir)
+                shutil.rmtree(run_path)
             else:
                 print("Training cancelled.")
                 exit()
-        writer = SummaryWriter(log_dir)
+        writer = SummaryWriter(run_path)
         return writer
 
     # Signal handler function

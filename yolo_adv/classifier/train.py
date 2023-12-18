@@ -1,9 +1,9 @@
 from classifier import Classifier
 
 if __name__ == "__main__":
-    data_path = '/home/elios/pighetti/adversarial-attacks-pytorch/yolo_adv/classifier/data'
+    data_path = '/Users/luca/Documents/adv_cls_data/train_data'
     model = Classifier()
-    model.load_dataset(root=data_path, normalize=True, batch_size=16, shuffle=True)
-    model.train(epochs=33, lr=0.001, valid_period=1, ckpt_period=5)
+    model.load_dataset(root=data_path, normalize=True, batch_size=128, shuffle=True)
+    model.train(exp_name='wd_exp', epochs=20, lr=0.001, valid_period=1, ckpt_period=3, patience=5)
     model.evaluate()
     
