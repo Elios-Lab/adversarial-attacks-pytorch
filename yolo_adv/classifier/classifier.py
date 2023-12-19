@@ -21,6 +21,8 @@ class Classifier():
         # Check if CUDA (GPU support) is available
         if torch.cuda.is_available():
             print("GPU is available. Using GPU:", torch.cuda.get_device_name(torch.cuda.current_device()))
+        elif torch.backends.mps.is_available():
+            print('MPS is available. Using MPS.')
         else:
             print("GPU is not available. Using CPU.")
         signal.signal(signal.SIGINT, self.signal_handler)
@@ -171,7 +173,7 @@ class Classifier():
         if not hasattr(self, 'model'):
             self.model = self.BinaryResNet50()
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
         state_dict = torch.load(model_path, map_location=device)
         if 'model_state_dict' in state_dict:
             state_dict = state_dict['model_state_dict'] 
@@ -193,7 +195,7 @@ class Classifier():
         image = self.process_image(image_path=image_path, image=image)      
         self.model.eval()  # Set the model to evaluation mode
         # Check if GPU is available
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
         self.model.to(device)
         image = image.to(device)
 
@@ -217,20 +219,25 @@ class Classifier():
         #total_predictions = 0
 
         true_positives = 0
+        true_negatives = 0
         false_positives = 0
         false_negatives = 0
 
-        for class_name in tqdm(os.listdir(dataset_path)):
+        for class_name in tqdm(sorted(os.listdir(dataset_path)), total=2):
             class_path = os.path.join(dataset_path, class_name)
             if os.path.isdir(class_path):
                 with tqdm(os.listdir(class_path), unit="img", leave=False) as tepoch:
                     for img_file in tepoch:
                         img_path = os.path.join(class_path, img_file)
                         predicted_class = self.predict(img_path)
-                        if predicted_class == class_name:
+                        if predicted_class == class_name == 'adv':
                             true_positives += 1
-                        else:
+                        elif predicted_class == 'adv' and class_name == 'real':
                             false_positives += 1
+                        elif predicted_class == 'real' and class_name == 'adv':
+                            false_negatives += 1
+                        else:
+                            true_negatives += 1
                             # if predicted_class not in os.listdir(dataset_path):
                             #     false_negatives += 1
                         # if predicted_class == class_name:
@@ -239,7 +246,7 @@ class Classifier():
 
         precision = true_positives / (true_positives + false_positives) if true_positives + false_positives > 0 else 0
         recall = true_positives / (true_positives + false_negatives) if true_positives + false_negatives > 0 else 0
-        accuracy = true_positives / (true_positives + false_positives + false_negatives) if true_positives + false_positives + false_negatives > 0 else 0
+        accuracy = (true_positives + true_negatives) / (true_positives + true_negatives + false_positives + false_negatives) if true_positives + true_negatives + false_positives + false_negatives > 0 else 0
 
         f1_score = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0
 
