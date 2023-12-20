@@ -78,17 +78,18 @@ class DeepFool(Attack):
         image.requires_grad = True
         if self.yolo:
             _,fs = self.loss_obj.compute_loss(image, label, bboxes, step, get_logits=True)
-            fs = fs[0][0]
+            fs = (torch.max(fs, dim=1)[0])[0]
         else:
             fs = self.get_logits(image)[0]
+        
         _, pre = torch.max(fs, dim=0)
-              
+
         if not label.numel():
             return (True, pre, image)
-
+        
         if pre != label:
             return (True, pre, image)
-
+        
         ws = self._construct_jacobian(fs, image)
         image = image.detach()
         label = label.int()

@@ -262,7 +262,7 @@ class Classifier():
         ])
 
         # Load the image
-        if image:
+        if image is not None:
             image = image.convert('RGB')
         else:
             image = Image.open(image_path).convert('RGB')

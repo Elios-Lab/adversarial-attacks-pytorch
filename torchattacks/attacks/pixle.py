@@ -294,6 +294,7 @@ class Pixle(Attack):
     
     def _get_yolo_prob(self, image, labels, bboxes):
         _,out = self.loss_obj.compute_loss(image, labels, bboxes, 0, get_logits=True)
+        out = torch.max(out, dim=1)[0]
         prob = softmax(out, dim=1)
         return prob.detach().cpu().numpy()
     
@@ -426,6 +427,7 @@ class Pixle(Attack):
                 p = self._get_yolo_prob(pert_image, n_label, bbox)[0]
             else:
                 p = self._get_prob(pert_image)[0]
+            
             mx = np.argmax(p)
 
             if target_attack:

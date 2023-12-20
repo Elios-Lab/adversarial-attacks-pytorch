@@ -94,10 +94,10 @@ if __name__ == '__main__':
         atk = VNIFGSM(model=model, yolo=True, eps=0.024, alpha=0.05, steps=args.steps, decay=1.0, N=5, beta=3/2)
     elif args.atk_type == 'PIXLE':
         norm_path = 'Pixle'
-        atk = Pixle(model, yolo=True, x_dimensions=(0.1, 0.2), restarts=20, max_iterations=100, update_each_iteration=True)
+        atk = Pixle(model, yolo=True, x_dimensions=(0.1, 0.2), restarts=10, max_iterations=60, update_each_iteration=True)
     elif args.atk_type == 'DEEPFOOL':
         norm_path = 'DeepFool'
-        atk = DeepFool(model, yolo=True, steps=2500, overshoot=0.2)
+        atk = DeepFool(model, yolo=True, steps=10, overshoot=0.002)
     
     
     
@@ -140,6 +140,6 @@ if __name__ == '__main__':
         adv_img.save(f'{args.output_data_dir}/adv_img/{atk.__repr__().split("(")[0]}/images/{data[0]["image_name"]}_{atk.__repr__().split("(")[0]}.png')
         if args.save_inference:
             for idx, output in enumerate(yolo_output):
-                output.save(f'{args.output_data_dir}/{directories[idx+1]}/{atk.__repr__().split("(")[0]}/{data[0]["image_name"]}.png')
+                output.save(f'{args.output_data_dir}/{directories[idx+1]}/{atk.__repr__().split("(")[0]}/images/{data[0]["image_name"]}_{atk.__repr__().split("(")[0]}.png')
             
     plt.show()

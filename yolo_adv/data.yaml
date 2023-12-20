@@ -1,5 +1,5 @@
-train: /home/elios/pighetti/adversarial-attacks-pytorch/yolo_adv/adv_data/norm
-val: /home/elios/pighetti/adversarial-attacks-pytorch/yolo_adv/adv_data/norm
+train: /home/elios/pighetti/adversarial-attacks-pytorch/yolo_adv/adv_data/adv/adv_img/VNIFGSM
+val: /home/elios/pighetti/adversarial-attacks-pytorch/yolo_adv/adv_data/adv/adv_img/VNIFGSM
 # train: /home/elios/pighetti/adversarial-attacks-pytorch/yolo_adv/adv_data/adv/adv_img/DeepFool
 # val: /home/elios/pighetti/adversarial-attacks-pytorch/yolo_adv/adv_data/adv/adv_img/DeepFool
 nc: 5 # number of classes
