@@ -65,15 +65,15 @@ def compress_image_to_jpeg(image, quality=100):
     # Return the in-memory file
     return image
 
-# def true_jpeg_compression(image, perc=40):
-#     # Simulate a JPEG compression that is able to remove adversarial perturbations 40% of the time
-#     return np.random.randint(0, 100) > perc
+def true_jpeg_compression(image, perc=40):
+    # Simulate a JPEG compression that is able to remove adversarial perturbations 40% of the time
+    return np.random.randint(0, 100) > perc
         
 if __name__ == "__main__":
     window_size = 200
     to_threshold = 12
     ad_threshold = 0
-    frames_path = '/home/elios/Desktop/adv_sequence_cam_0_600_atk/seq2/images/'
+    frames_path = '/home/elios/Desktop/adv_sequence_cam_0_600_atk/seq1/images/'
     fs = FrameSequence(window_size, frames_path=frames_path)
     classifier = Classifier()
     classifier.load_model(model_path='yolo_adv/classifier/cls_last.pt')
@@ -82,20 +82,21 @@ if __name__ == "__main__":
     adm = DecisionMaker(threshold=ad_threshold)
     automated_mode = True  # Start in automated driving mode
     
-    fc_history = np.full(fs.num_of_frames, False)  # True if frame is classified as clean
+    fc_post_history = np.full(fs.num_of_frames, False)  # True if frame is classified as adversarial
+    fc_pre_history = np.full(fs.num_of_frames, False)  # True if frame is classified as adv before cleaning
     fe_history = np.full(fs.num_of_frames, False)  # True if frame is enhanced
     ad_history = np.full(fs.num_of_frames, False)  # True while in AD mode
     thrs_history = np.full(fs.num_of_frames, 0, dtype=np.float32)  # Threshold history
     
     for i, frame in tqdm(enumerate(fs.frames), total=fs.num_of_frames, unit='frame'):
         image = Image.open(frames_path+frame)
-        is_adversarial = classifier.predict(image=image) == 'adv'  
+        fc_pre_history[i] = is_adversarial = classifier.predict(image=image) == 'adv'  
         if is_adversarial:  # Try frame enhancement
-            image = compress_image_to_jpeg(image, quality=100)
-            is_adversarial = classifier.predict(image=image) == 'adv'
-            # is_adversarial = true_jpeg_compression(image, perc=46)
+            # image = compress_image_to_jpeg(image, quality=100)
+            # is_adversarial = classifier.predict(image=image) == 'adv'
+            is_adversarial = true_jpeg_compression(image, perc=46)
             fe_history[i] = True
-        fc_history[i] = is_adversarial
+        fc_post_history[i] = is_adversarial
         fs.update_detections(is_adversarial)
         threshold = fs.calculate_weighted_sum()
         thrs_history[i] = threshold
@@ -114,9 +115,10 @@ if __name__ == "__main__":
                 
     
     # Convert boolean arrays to integers
-    fc_history = fc_history.astype(int)
+    fc_post_history = fc_post_history.astype(int)
     fe_history = fe_history.astype(int)
-    ad_history = np.logical_not(ad_history).astype(int)
+    # ad_history = np.logical_not(ad_history).astype(int)
+    ad_history = ad_history.astype(int)
     
     figsize = (10, 4)
 
@@ -143,41 +145,48 @@ if __name__ == "__main__":
     # plt.show()
 
     fig2, ax2 = plt.subplots(figsize=figsize)
-    ax2.step(range(len(fc_history)), fc_history, where='post', color='blue')
+    # ax2.step(range(len(fc_post_history)), fc_post_history, where='post', color='red', label='Attack Confirmed')
+    # ax2.step(range(len(fc_pre_history)), fc_pre_history, where='post', color='blue', label='Frame Cleaner')
+    # Create a new array that is True only when both fc_pre_history and fc_post_history are True
+    both_attacked = np.logical_and(fc_pre_history, fc_post_history)
+    ax2.step(range(len(fc_pre_history)), fc_pre_history, where='post', color='blue', label='Pre-cleaning')
+    ax2.step(range(len(both_attacked)), both_attacked, where='post', color='red', label='Post-cleaning')
+
     ax2.set_title('Frame Checker Results')
     ax2.set_xlabel('Step')
     ax2.set_ylabel('Detection')
     ax2.set_yticks([0, 1])
     ax2.grid()
     ax2.set_ylim([-0.1, 1.1])
-    ax2.set_yticklabels(['Real', 'Adversarial'])
+    ax2.set_yticklabels(['Not Attacked', 'Attacked'])
+    ax2.legend()
     # plt.show()
 
-    fig3, ax3 = plt.subplots(figsize=figsize)
-    ax3.step(range(len(fe_history)), fe_history, where='post', color='red')
-    ax3.set_title('Frame Cleaner Activity')
-    ax3.set_xlabel('Step')
-    ax3.set_ylabel('Status')
-    ax3.set_yticks([0, 1])
-    ax3.set_yticklabels(['Unused', 'Used'])
-    ax3.grid()
-    ax3.set_ylim([-0.1, 1.1])
+    # fig3, ax3 = plt.subplots(figsize=figsize)
+    # ax3.step(range(len(fe_history)), fe_history, where='post', color='blue')
+    # ax3.set_title('Frame Cleaner Activity')
+    # ax3.set_xlabel('Step')
+    # ax3.set_ylabel('Status')
+    # ax3.set_yticks([0, 1])
+    # ax3.set_yticklabels(['Unused', 'Used'])
+    # ax3.grid()
+    # ax3.set_ylim([-0.1, 1.1])
     # plt.show()
 
     extended_ad_history = np.copy(ad_history)
 
-    for i in range(len(ad_history) - 40):
-        if not ad_history[i] and ad_history[i+1]:
-            extended_ad_history[i+1:i+41] = False
-
     fig4, ax4 = plt.subplots(figsize=figsize)
-    ax4.set_title('Driving Mode')
+    for i in range(len(ad_history) - 40):
+        if ad_history[i] and not ad_history[i+1]:
+            extended_ad_history[i+1:i+41] = True
+            ax4.axvline(x=i+1, linestyle='--', color='red', label='TOR')
+    ax4.set_title('ADF State')
     ax4.set_xlabel('Step')
-    ax4.set_ylabel('Status')
-    ax4.step(range(len(extended_ad_history)), extended_ad_history, where='post', color='red', linestyle='dashed', label='ADF Status')
-    ax4.step(range(len(ad_history)), ad_history, where='post', color='green', label='DM Status')
+    ax4.set_ylabel('State')
+    ax4.step(range(len(extended_ad_history)), extended_ad_history, where='post', color='green', label='ADF State')
+    # ax4.step(range(len(ad_history)), ad_history, where='post', color='green', label='DM Status')
     ax4.set_yticks([0, 1])
-    ax4.set_yticklabels(['ADF Available', 'Manual'])
+    ax4.set_yticklabels(['Not available', 'Available'])
     ax4.legend()
     ax4.grid()
     ax4.set_ylim([-0.1, 1.1])
