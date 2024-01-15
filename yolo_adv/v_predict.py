@@ -5,7 +5,7 @@ from ultralytics import YOLO
 from torchattacks import PGD, FGSM, FFGSM, VNIFGSM, Pixle, DeepFool
  
 # Load the YOLOv8 model
-model = YOLO('/home/elios/pighetti/adversarial-attacks-pytorch/yolo_adv/best.pt')
+model = YOLO('/home/pigo/adversarial-attacks-pytorch/yolo_adv/best.pt')
 model.to(device='cuda', non_blocking=True)
 model.training = False
  
