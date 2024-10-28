@@ -3,7 +3,8 @@ from PIL import Image
 from ultralytics import YOLO
 from torchvision import transforms
 from utils import YOLOv8Dataloader
-from torchattacks import PGD, FGSM, FFGSM, VNIFGSM, Pixle, DeepFool, Square
+from torchattacks import PGD, FGSM, FFGSM, VNIFGSM, Pixle, DeepFool
+from torchattacks.attacks.poltergeist import cal_blur
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 import argparse
@@ -98,6 +99,8 @@ if __name__ == '__main__':
     elif args.atk_type == 'DEEPFOOL':
         norm_path = 'DeepFool'
         atk = DeepFool(model, yolo=True, steps=10, overshoot=0.002)
+    elif args.atk_type == 'POLTER':
+        norm_path = 'Poltergeist'
     
     
     
@@ -111,8 +114,10 @@ if __name__ == '__main__':
     for i, data in tqdm(enumerate(data_loader), total=dl_len, desc=f"Running {atk.__repr__().split('(')[0]} Attack"):
 
         yolo_output = []
-        loss, adv_img = atk(data[0]['image'], data[0]['classes'], data[0]['boxes'])
-            
+        if norm_path != 'Poltergeist':
+            loss, adv_img = atk(data[0]['image'], data[0]['classes'], data[0]['boxes'])
+        else:
+            adv_img = cal_blur(data[0]['image'][0].detach().clone(), 1.5, 0, 0)
         inference_img = transform(data[0]['image'][0].detach().clone())
         adv_img = transform(adv_img[0].detach().clone())
                 
