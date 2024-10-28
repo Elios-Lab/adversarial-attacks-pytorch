@@ -2,7 +2,7 @@ from classifier import Classifier
 
 if __name__ == "__main__":
     # img_path = '/home/pigo/projects/adversarial-attacks-pytorch/yolo_adv/adv_data/norm/images/dayClip7--00930.jpg'
-    ds_path = '/Users/luca/Documents/adv_cls_data/test_data'
+    ds_path = r'C:\Users\luca\Documents\FC_post_FCL_test'
     classifier = Classifier()
     classifier.load_model(model_path='yolo_adv/classifier/runs/exp/last.pt')
     #./yolo_adv/classifier/runs/exp/luca_last.pt
@@ -12,4 +12,8 @@ if __name__ == "__main__":
     print(f'Precision: {result[1]}')    
     print(f'Recall: {result[2]}')
     print(f'F1 Score: {result[3]}')
+    print(f'True Positive Rate: {result[4]}')
+    print(f'False Positive Rate: {result[5]}')
+    print(f'True Negative Rate: {result[6]}')
+    print(f'False Negative Rate: {result[7]}')
     

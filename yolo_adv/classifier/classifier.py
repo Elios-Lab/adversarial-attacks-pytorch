@@ -249,9 +249,14 @@ class Classifier():
         accuracy = (true_positives + true_negatives) / (true_positives + true_negatives + false_positives + false_negatives) if true_positives + true_negatives + false_positives + false_negatives > 0 else 0
 
         f1_score = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0
+        
+        TPR = true_positives / (true_positives + false_negatives + true_negatives + false_positives)
+        FPR = false_positives / (true_positives + false_negatives + true_negatives + false_positives)
+        TNR = true_negatives / (true_positives + false_negatives + true_negatives + false_positives)
+        FNR = false_negatives / (true_positives + false_negatives + true_negatives + false_positives)
 
         #accuracy = correct_predictions / total_predictions if total_predictions > 0 else 0
-        return accuracy, precision, recall, f1_score
+        return accuracy, precision, recall, f1_score, TPR, FPR, TNR, FNR
         
     def process_image(self, image_path=None, image:Image=None):
         # Define the same transformations as used during training
