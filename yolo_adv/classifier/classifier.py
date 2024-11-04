@@ -10,11 +10,13 @@ import os
 import shutil
 import signal
 from PIL import Image
-from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score, confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
+
 
 class Classifier():
     def __init__(self):
-        self.model = self.BinaryResNet50()
+        self.model = self.ResNet50()
         self.current_epoch = 0
         self.exp_name = None
         self.optimizer = None
@@ -26,38 +28,43 @@ class Classifier():
         else:
             print("GPU is not available. Using CPU.")
         signal.signal(signal.SIGINT, self.signal_handler)
-        self.class_names = {0: 'adv', 1: 'real'}
+        self.class_names = {0: 'clean', 1: 'pixle', 2: 'poltergeist'}
 
         
-    def load_dataset(self, root, normalize=True, batch_size=16, shuffle=True):
-        
+    def load_dataset(self, root, normalize=True, batch_size=16, shuffle=True):       
         if not os.path.exists(root):
             raise FileNotFoundError(f"The specified path does not exist: {root}")
 
         # Transformations
         if normalize:
             transform = transforms.Compose([
-                transforms.Resize((224, 224)),  # Resize images to a common size
+                # transforms.Resize((224, 224)),  # Resize images to a common size
                 transforms.ToTensor(),          # Convert images to PyTorch tensors
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize for pre-trained models
             ])
         else:
             transform = transforms.Compose([
-                transforms.Resize((224, 224)),  # Resize images to a common size
+                # transforms.Resize((224, 224)),  # Resize images to a common size
                 transforms.ToTensor(),          # Convert images to PyTorch tensors
             ])
         
-        # Load datasets
-        dataset = datasets.ImageFolder(root=root, transform=transform)
+        # Load datasets from separate train, validation, and test folders
+        train_path = os.path.join(root, 'train')
+        val_path = os.path.join(root, 'val')
+        test_path = os.path.join(root, 'test')
 
-        # Splitting the dataset into training and validation sets (80-20)
-        train_size = int(0.8 * len(dataset))
-        valid_size = len(dataset) - train_size
-        train_dataset, valid_dataset = torch.utils.data.random_split(dataset, [train_size, valid_size])
+        if not os.path.exists(train_path) or not os.path.exists(val_path) or not os.path.exists(test_path):
+            raise FileNotFoundError(f"One or more dataset folders (train, val, test) do not exist in the specified path: {root}")
+
+        train_dataset = datasets.ImageFolder(root=train_path, transform=transform)
+        val_dataset = datasets.ImageFolder(root=val_path, transform=transform)
+        test_dataset = datasets.ImageFolder(root=test_path, transform=transform)
 
         # Data loaders
         self.train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle)
-        self.valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=shuffle)        
+        self.valid_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=shuffle)
+        # self.test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+     
 
     # Training function
     def train(self, exp_name='exp', epochs=10, lr=0.001, valid_period=5, ckpt_period=None, patience=None):
@@ -83,6 +90,7 @@ class Classifier():
         patience_counter = 0
         
         for self.current_epoch in tqdm(range(epochs)):
+            self.model.train()
             with tqdm(self.train_loader, unit="batch", leave=False) as tepoch:
                 for i, (images, labels) in enumerate(tepoch):
                     self.optimizer.zero_grad()
@@ -142,11 +150,12 @@ class Classifier():
 
         avg_loss = total_loss / total_samples
         accuracy = accuracy_score(all_labels, all_predictions)
-        precision = precision_score(all_labels, all_predictions)
-        recall = recall_score(all_labels, all_predictions)
-        f1 = f1_score(all_labels, all_predictions)
+        precision = precision_score(all_labels, all_predictions, average='macro')
+        recall = recall_score(all_labels, all_predictions, average='macro')
+        f1 = f1_score(all_labels, all_predictions, average='macro')
         
         return avg_loss, accuracy, precision, recall, f1
+
 
         
     def evaluate(self, valid_loader=None):
@@ -171,7 +180,7 @@ class Classifier():
         map_to_device (bool): If True, map the model to the appropriate device (GPU if available).
         """
         if not hasattr(self, 'model'):
-            self.model = self.BinaryResNet50()
+            self.model = self.ResNet50()
 
         device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
         state_dict = torch.load(model_path, map_location=device)
@@ -223,47 +232,79 @@ class Classifier():
         false_positives = 0
         false_negatives = 0
 
+        all_labels = []
+        all_predictions = []
+
         for class_name in tqdm(sorted(os.listdir(dataset_path)), total=2):
             class_path = os.path.join(dataset_path, class_name)
             if os.path.isdir(class_path):
-                with tqdm(os.listdir(class_path), unit="img", leave=False) as tepoch:
+                with tqdm(os.listdir(class_path), unit="img", leave=False, initial=1) as tepoch:
                     for img_file in tepoch:
                         img_path = os.path.join(class_path, img_file)
                         predicted_class = self.predict(img_path)
-                        if predicted_class == class_name == 'adv':
+                        all_labels.append(class_name)
+                        all_predictions.append(predicted_class)
+                        if predicted_class == class_name == 'pixle' or predicted_class == class_name == 'poltergeist':
                             true_positives += 1
-                        elif predicted_class == 'adv' and class_name == 'real':
+                        elif predicted_class == class_name == 'clean':
+                            true_negatives += 1
+                        elif (predicted_class == 'pixle' or predicted_class == 'poltergeist') and class_name == 'clean':
                             false_positives += 1
-                        elif predicted_class == 'real' and class_name == 'adv':
+                        elif predicted_class == 'clean' and (class_name == 'pixle' or class_name == 'poltergeist'):
                             false_negatives += 1
                         else:
-                            true_negatives += 1
+                            print(f"Unexpected class: {predicted_class} for image classified as {class_name}")
+                            
+                        # elif predicted_class == 'adv' and class_name == 'real':
+                        #     false_positives += 1
+                        # elif predicted_class == 'real' and class_name == 'adv':
+                        #     false_negatives += 1
+                        # else:
+                        #     true_negatives += 1
                             # if predicted_class not in os.listdir(dataset_path):
                             #     false_negatives += 1
                         # if predicted_class == class_name:
                         #     correct_predictions += 1
                         # total_predictions += 1
-
+        # Calculate metrics using sklearn
+        s_accuracy = accuracy_score(all_labels, all_predictions)
+        s_precision = precision_score(all_labels, all_predictions, average='weighted', zero_division=0)
+        s_recall = recall_score(all_labels, all_predictions, average='weighted', zero_division=0)
+        s_f1_score = f1_score(all_labels, all_predictions, average='weighted', zero_division=0)
+        print('Metrics in one-vs-all setting:')
+        print(f"Accuracy: {s_accuracy}, Precision: {s_precision}, Recall: {s_recall}, F1 Score: {s_f1_score}")
         precision = true_positives / (true_positives + false_positives) if true_positives + false_positives > 0 else 0
         recall = true_positives / (true_positives + false_negatives) if true_positives + false_negatives > 0 else 0
         accuracy = (true_positives + true_negatives) / (true_positives + true_negatives + false_positives + false_negatives) if true_positives + true_negatives + false_positives + false_negatives > 0 else 0
 
-        f1_score = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0
+        f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0
         
         TPR = true_positives / (true_positives + false_negatives + true_negatives + false_positives)
         FPR = false_positives / (true_positives + false_negatives + true_negatives + false_positives)
         TNR = true_negatives / (true_positives + false_negatives + true_negatives + false_positives)
         FNR = false_negatives / (true_positives + false_negatives + true_negatives + false_positives)
 
+        # Plot the confusion matrix
+        cm = confusion_matrix(all_labels, all_predictions, labels=classes)
+        print('Metrics in clean-vs-all setting:')
+        print(f"True Positives: {true_positives}, True Negatives: {true_negatives}, False Positives: {false_positives}, False Negatives: {false_negatives}")
         #accuracy = correct_predictions / total_predictions if total_predictions > 0 else 0
-        return accuracy, precision, recall, f1_score, TPR, FPR, TNR, FNR
+        return accuracy, precision, recall, f1, TPR, FPR, TNR, FNR, cm
+    
+    def plot_cm(self, cm):
+        classes = list(self.class_names.values())
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
+        disp.plot(cmap=plt.cm.Blues)
+        plt.title('Confusion Matrix')
+        plt.show()
+
         
     def process_image(self, image_path=None, image:Image=None):
         # Define the same transformations as used during training
         transform = transforms.Compose([
-            transforms.Resize((224, 224)),  # Assuming you used this size during training
+            # transforms.Resize((224, 224)),  # Assuming you used this size during training
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
         # Load the image
@@ -307,9 +348,9 @@ class Classifier():
         print("Checkpoint saved. Exiting.")
         exit(0)
         
-    class BinaryResNet50(nn.Module):
+    class ResNet50(nn.Module):
         def __init__(self):
-            super(Classifier.BinaryResNet50, self).__init__()
+            super(Classifier.ResNet50, self).__init__()
             self.resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)  # Using ResNet50
             for param in self.resnet.parameters():
                 param.requires_grad = False  # Freeze the ResNet50 parameters, only final layer will be trained
@@ -318,8 +359,8 @@ class Classifier():
             self.resnet.fc = nn.Sequential(
                 nn.Linear(self.resnet.fc.in_features, 512),
                 nn.ReLU(),
-                nn.Dropout(0.5),
-                nn.Linear(512, 2)  # 2 classes: attacked and non-attacked
+                nn.Dropout(0.2),
+                nn.Linear(512, 3)  # 2 classes: attacked and non-attacked
             )
 
         def forward(self, x):

@@ -2,9 +2,9 @@ from classifier import Classifier
 
 if __name__ == "__main__":
     # img_path = '/home/pigo/projects/adversarial-attacks-pytorch/yolo_adv/adv_data/norm/images/dayClip7--00930.jpg'
-    ds_path = r'C:\Users\luca\Documents\FC_post_FCL_test'
+    ds_path = r'C:\Users\lazzaroni\Documents\adv\datasets\FC\test'
     classifier = Classifier()
-    classifier.load_model(model_path='yolo_adv/classifier/runs/exp/last.pt')
+    classifier.load_model(model_path='yolo_adv/classifier/runs/3_classes/last.pt')
     #./yolo_adv/classifier/runs/exp/luca_last.pt
     # print(classifier.predict(image_path=img_path))
     result = classifier.evaluate_model_on_dataset(dataset_path=ds_path)
@@ -16,4 +16,4 @@ if __name__ == "__main__":
     print(f'False Positive Rate: {result[5]}')
     print(f'True Negative Rate: {result[6]}')
     print(f'False Negative Rate: {result[7]}')
-    
+    classifier.plot_cm(result[8])
