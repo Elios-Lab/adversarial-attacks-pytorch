@@ -14,50 +14,47 @@ def cal_blur(imgarray, theta, delta, L, S=0):
     theta = theta / 180 * math.pi
     delta = delta / 180 * math.pi
     blurred_imgarray = np.empty_like(imgarray, dtype=np.float32)
-    for x in range(0, imgheight):
-        for y in range(0, imgwidth):
+    
+    for x in range(imgheight):
+        for y in range(imgwidth):
             R = math.sqrt((x - c0) ** 2 + (y - c1) ** 2)
             alpha = math.atan2(y - c1, x - c0)
             X_cos = L * math.cos(delta) - S * R * math.cos(alpha)
             Y_sin = L * math.sin(delta) - S * R * math.sin(alpha)
-            N = int(
-                max(
-                    abs(R * math.cos(alpha + theta) + X_cos + c0 - x),
-                    abs(R * math.sin(alpha + theta) + Y_sin + c1 - y),
-                )
-            )
-            if N <= 0:
+            N = max(int(abs(R * math.cos(alpha + theta) + X_cos + c0 - x)),
+                    int(abs(R * math.sin(alpha + theta) + Y_sin + c1 - y)))
+            
+            if N <= 1:
+                blurred_imgarray[x, y] = imgarray[x, y]
                 continue
+            
             count = 0
             sum_r, sum_g, sum_b = 0.0, 0.0, 0.0
-            for i in range(0, N + 1):
+            for i in range(N + 1):
                 n = i / N
                 xt = int(R * math.cos(alpha + n * theta) + n * X_cos + c0)
                 yt = int(R * math.sin(alpha + n * theta) + n * Y_sin + c1)
-                if xt < 0 or xt >= imgheight:
-                    continue
-                elif yt < 0 or yt >= imgwidth:
-                    continue
-                else:
+                
+                if 0 <= xt < imgheight and 0 <= yt < imgwidth:
                     sum_r += imgarray[xt, yt][0]
                     sum_g += imgarray[xt, yt][1]
                     sum_b += imgarray[xt, yt][2]
                     count += 1
+            
             if count > 0:
-                blurred_imgarray[x, y] = np.array(
-                    [sum_r / count, sum_g / count, sum_b / count]
-                )
+                blurred_imgarray[x, y] = np.array([sum_r / count, sum_g / count, sum_b / count])
             else:
                 blurred_imgarray[x, y] = imgarray[x, y]
+    
     blurred_imgarray = np.clip(blurred_imgarray, 0, 255).astype(np.uint8)
     return blurred_imgarray
 
-source_dir = "/home/elios/pighetti/BoschDriveU5px/valid/images"
-target_dir = "/home/elios/pighetti/BoschDriveU5px/polter_adv_valid"
+source_dir = r"C:\Users\elios\Downloads\BoschDriveU5px\train\images"
+target_dir = r"C:\Users\elios\Downloads\BoschDriveU5px\polter_train"
 
 if not os.path.exists(target_dir):
     os.makedirs(target_dir)
-thetas = [1, 2, 5, 10, 20]
+thetas = [0.5, 1, 2, 5]
 
 for i, filename in tqdm(enumerate(os.listdir(source_dir)), total=len(os.listdir(source_dir)), desc="Applying Poltergeist Attack"):
     if filename.endswith(".jpg") or filename.endswith(".png"):
