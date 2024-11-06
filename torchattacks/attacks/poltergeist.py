@@ -1,10 +1,11 @@
 import math
 import numpy as np
+from tqdm import tqdm
+import os
 import cv2
 from numba import jit
 
-
-@jit
+@jit(nopython=True)
 def cal_blur(imgarray, theta, delta, L, S=0):
     imgheight = imgarray.shape[0]
     imgwidth = imgarray.shape[1]
@@ -12,7 +13,7 @@ def cal_blur(imgarray, theta, delta, L, S=0):
     c1 = int(imgwidth / 2)
     theta = theta / 180 * math.pi
     delta = delta / 180 * math.pi
-    blurred_imgarray = np.copy(imgarray)
+    blurred_imgarray = np.empty_like(imgarray, dtype=np.float32)
     for x in range(0, imgheight):
         for y in range(0, imgwidth):
             R = math.sqrt((x - c0) ** 2 + (y - c1) ** 2)
@@ -28,7 +29,7 @@ def cal_blur(imgarray, theta, delta, L, S=0):
             if N <= 0:
                 continue
             count = 0
-            sum_r, sum_g, sum_b = 0, 0, 0
+            sum_r, sum_g, sum_b = 0.0, 0.0, 0.0
             for i in range(0, N + 1):
                 n = i / N
                 xt = int(R * math.cos(alpha + n * theta) + n * X_cos + c0)
@@ -42,16 +43,28 @@ def cal_blur(imgarray, theta, delta, L, S=0):
                     sum_g += imgarray[xt, yt][1]
                     sum_b += imgarray[xt, yt][2]
                     count += 1
-            blurred_imgarray[x, y] = np.array(
-                [sum_r / count, sum_g / count, sum_b / count]
-            )
+            if count > 0:
+                blurred_imgarray[x, y] = np.array(
+                    [sum_r / count, sum_g / count, sum_b / count]
+                )
+            else:
+                blurred_imgarray[x, y] = imgarray[x, y]
+    blurred_imgarray = np.clip(blurred_imgarray, 0, 255).astype(np.uint8)
     return blurred_imgarray
 
+source_dir = "/home/elios/pighetti/BoschDriveU5px/valid/images"
+target_dir = "/home/elios/pighetti/BoschDriveU5px/polter_adv_valid"
 
-arr = cv2.imread("/home/pigo/adversarial-attacks-pytorch/yolo_adv/adv_data/norm/images/20210616_141500_cam_2_00015734.jpg", cv2.IMREAD_COLOR)
-# arr = arr.reshape([*arr.shape, 1])
-# arr = np.concatenate([arr]*3, axis=2)
-# empty = 255 * np.ones((arr.shape[0], 400, 3))
-# arr = np.concatenate([arr, empty], axis=1)
-arr = cal_blur(arr, 2, 0, 0)
-cv2.imwrite(r"/home/pigo/adversarial-attacks-pytorch/yolo_adv/adv_data/adv/Polter/images/20210616_141500_cam_2_00015734.jpg", arr.astype(np.uint8))
+if not os.path.exists(target_dir):
+    os.makedirs(target_dir)
+thetas = [1, 2, 5, 10, 20]
+
+for i, filename in tqdm(enumerate(os.listdir(source_dir)), total=len(os.listdir(source_dir)), desc="Applying Poltergeist Attack"):
+    if filename.endswith(".jpg") or filename.endswith(".png"):
+        img_path = os.path.join(source_dir, filename)
+        img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+
+        theta = thetas[i % len(thetas)]
+        blurred_img = cal_blur(img, theta, 0, 0, 0)
+        new_filename = f"{os.path.splitext(filename)[0]}_theta_{theta}.jpg"
+        cv2.imwrite(os.path.join(target_dir, new_filename), blurred_img)

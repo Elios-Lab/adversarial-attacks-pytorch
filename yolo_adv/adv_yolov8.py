@@ -4,12 +4,10 @@ from ultralytics import YOLO
 from torchvision import transforms
 from utils import YOLOv8Dataloader
 from torchattacks import PGD, FGSM, FFGSM, VNIFGSM, Pixle, DeepFool
-from torchattacks.attacks.poltergeist import cal_blur
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 import argparse
 import os
-
 
 def plot_loss(dl_len, yolo_output, idx, col, atk):
     plt.suptitle(f"YOLOv8 Inference vs {atk.__repr__().split('(')[0]} Attack - Steps: {atk.steps if hasattr(atk,'steps') else 1}, Epsilon: {round(atk.eps,3)}, \
@@ -30,7 +28,6 @@ def plot_loss(dl_len, yolo_output, idx, col, atk):
         plt.grid()
 
 if __name__ == '__main__':
-    
     argparser = argparse.ArgumentParser(description='YOLOv8 Attack')
     argparser.add_argument('--input_data_dir',
                            '-idd',
@@ -46,7 +43,7 @@ if __name__ == '__main__':
     
     argparser.add_argument('--model_path',
                             '-mp',
-                            default='./yolo_adv/best.pt',
+                            default='new_best.pt',
                             type=str,
                             help='define the path of the YOLOv8 model to attack (default: ./yolo_adv/best.pt)')
         
@@ -99,11 +96,7 @@ if __name__ == '__main__':
     elif args.atk_type == 'DEEPFOOL':
         norm_path = 'DeepFool'
         atk = DeepFool(model, yolo=True, steps=10, overshoot=0.002)
-    elif args.atk_type == 'POLTER':
-        norm_path = 'Poltergeist'
-    
-    
-    
+
     # Create the dataset
     dataset = YOLOv8Dataloader(images_dir=f'{args.input_data_dir}/images', annotations_dir=f'{args.input_data_dir}/labels', transform=None)
  
@@ -114,10 +107,7 @@ if __name__ == '__main__':
     for i, data in tqdm(enumerate(data_loader), total=dl_len, desc=f"Running {atk.__repr__().split('(')[0]} Attack"):
 
         yolo_output = []
-        if norm_path != 'Poltergeist':
-            loss, adv_img = atk(data[0]['image'], data[0]['classes'], data[0]['boxes'])
-        else:
-            adv_img = cal_blur(data[0]['image'][0].detach().clone(), 1.5, 0, 0)
+        loss, adv_img = atk(data[0]['image'], data[0]['classes'], data[0]['boxes'])
         inference_img = transform(data[0]['image'][0].detach().clone())
         adv_img = transform(adv_img[0].detach().clone())
                 
