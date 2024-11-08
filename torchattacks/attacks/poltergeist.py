@@ -49,8 +49,8 @@ def cal_blur(imgarray, theta, delta, L, S=0):
     blurred_imgarray = np.clip(blurred_imgarray, 0, 255).astype(np.uint8)
     return blurred_imgarray
 
-source_dir = r"C:\Users\elios\Downloads\BoschDriveU5px\train\images"
-target_dir = r"C:\Users\elios\Downloads\BoschDriveU5px\polter_train"
+source_dir = r"C:\Users\elios\Downloads\BoschDriveU5px\valid\images"
+target_dir = r"C:\Users\elios\Downloads\BoschDriveU5px\polter_valid"
 
 if not os.path.exists(target_dir):
     os.makedirs(target_dir)
