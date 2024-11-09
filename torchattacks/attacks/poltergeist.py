@@ -49,8 +49,8 @@ def cal_blur(imgarray, theta, delta, L, S=0):
     blurred_imgarray = np.clip(blurred_imgarray, 0, 255).astype(np.uint8)
     return blurred_imgarray
 
-source_dir = r"C:\Users\elios\Downloads\BoschDriveU5px\valid\images"
-target_dir = r"C:\Users\elios\Downloads\BoschDriveU5px\polter_valid"
+source_dir = r"/home/pigo/Desktop/BoschDriveU5px/test/5px/images/"
+target_dir = r"/home/pigo/Desktop/BoschDriveU5px/polter_test_2/"
 
 if not os.path.exists(target_dir):
     os.makedirs(target_dir)
@@ -61,7 +61,7 @@ for i, filename in tqdm(enumerate(os.listdir(source_dir)), total=len(os.listdir(
         img_path = os.path.join(source_dir, filename)
         img = cv2.imread(img_path, cv2.IMREAD_COLOR)
 
-        theta = thetas[i % len(thetas)]
+        theta = 5
         blurred_img = cal_blur(img, theta, 0, 0, 0)
         new_filename = f"{os.path.splitext(filename)[0]}_theta_{theta}.jpg"
         cv2.imwrite(os.path.join(target_dir, new_filename), blurred_img)

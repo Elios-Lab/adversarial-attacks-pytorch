@@ -1,8 +1,9 @@
 # For torchattacks
 # torch>=1.4.0  # It forces to update torch to LTS version.
-torch==2.5.1 --index-url https://download.pytorch.org/whl/cu124
-torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu124
-torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch==2.5.1 
+torchvision==0.20.1
+torchaudio==2.5.1 
 scipy>=0.14.0
 tensorboard
 scikit-learn

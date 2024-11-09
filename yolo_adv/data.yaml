@@ -1,6 +1,4 @@
-train: /home/elios/pighetti/adversarial-attacks-pytorch/yolo_adv/adv_data/adv/adv_img/VNIFGSM
-val: /home/elios/pighetti/adversarial-attacks-pytorch/yolo_adv/adv_data/adv/adv_img/VNIFGSM
-# train: /home/elios/pighetti/adversarial-attacks-pytorch/yolo_adv/adv_data/adv/adv_img/DeepFool
-# val: /home/elios/pighetti/adversarial-attacks-pytorch/yolo_adv/adv_data/adv/adv_img/DeepFool
+train: /home/pigo/Desktop/BoschDriveU5px/test/5px/
+val: /home/pigo/Desktop/BoschDriveU5px/test/5px/
 nc: 5 # number of classes
-names: ["green", "off", "red", "red_yellow", "yellow"]
+names: [0:'Green', 1:'Yellow', 2:'Red', 3:'Off', 4:'Red-Yellow']

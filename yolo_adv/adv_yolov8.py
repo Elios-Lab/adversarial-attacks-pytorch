@@ -92,7 +92,7 @@ if __name__ == '__main__':
         atk = VNIFGSM(model=model, yolo=True, eps=0.0024, alpha=0.005, steps=args.steps, decay=1.0, N=5, beta=3/2)
     elif args.atk_type == 'PIXLE':
         norm_path = 'Pixle'
-        atk = Pixle(model, yolo=True, x_dimensions=(0.1, 0.2), restarts=50, max_iterations=25, update_each_iteration=True)
+        atk = Pixle(model, yolo=True, x_dimensions=(0.1, 0.2), restarts=10, max_iterations=5, update_each_iteration=True)
     elif args.atk_type == 'DEEPFOOL':
         norm_path = 'DeepFool'
         atk = DeepFool(model, yolo=True, steps=10, overshoot=0.002)
