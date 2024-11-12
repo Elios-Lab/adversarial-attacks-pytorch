@@ -3,7 +3,7 @@ from classifier import Classifier
 if __name__ == "__main__":
     # img_path = '/home/pigo/projects/adversarial-attacks-pytorch/yolo_adv/adv_data/norm/images/dayClip7--00930.jpg'
     ds_path = r'C:\Users\lazzaroni\Documents\adv\datasets\FC\test'
-    classifier = Classifier()
+    classifier = Classifier('resnet50')
     classifier.load_model(model_path='yolo_adv/classifier/runs/3_classes/last.pt')
     #./yolo_adv/classifier/runs/exp/luca_last.pt
     # print(classifier.predict(image_path=img_path))

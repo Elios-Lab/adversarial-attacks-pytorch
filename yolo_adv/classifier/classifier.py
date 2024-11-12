@@ -13,10 +13,15 @@ from PIL import Image
 from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score, confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
 
-
 class Classifier():
-    def __init__(self):
-        self.model = self.ResNet50()
+    def __init__(self, model: str = 'resnet50'):
+        if model == 'resnet50':
+            self.model = self.ResNet50()
+        elif model == 'mobilenetv2':
+            self.model = self.MobileNetV2()
+        else:
+            raise ValueError("Invalid model name. Choose from 'resnet50' or 'mobilenetv2'")
+        print(f'Using {model} model')
         self.current_epoch = 0
         self.exp_name = None
         self.optimizer = None
