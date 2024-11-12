@@ -404,8 +404,9 @@ class Pixle(Attack):
                 p = self._get_yolo_prob(pert_image, n_label, bbox)
             else:
                 p = self._get_prob(pert_image)
-            
-            p = p[np.arange(len(p)), label.astype(int)]
+                
+            valid_indices = label.astype(int) < p.shape[1]
+            p = p[np.arange(len(p)), label.astype(int)[valid_indices]]
 
             if target_attack:
                 p = 1 - p

@@ -6,13 +6,18 @@ from torchvision import transforms
 import numpy as np
 
 class YOLOv8Dataloader(Dataset):
-    def __init__(self, images_dir, annotations_dir, transform=None):
+    def __init__(self, images_dir, annotations_dir, target_dir=None, transform=None):
         self.images_dir = images_dir
         self.annotations_dir = annotations_dir
         self.transform = transform
-
-        # List of filenames of images
-        self.images = [file for file in os.listdir(images_dir) if file.endswith('.jpg') or file.endswith('.png')]
+       
+        if target_dir:
+            self.images = [
+                file for file in os.listdir(images_dir)
+                if not os.path.exists(os.path.join(target_dir, f"{os.path.splitext(file)[0]}_Pixle{os.path.splitext(file)[1]}"))
+            ]
+        else:
+            self.images = [file for file in os.listdir(images_dir) if file.endswith('.jpg') or file.endswith('.png')]
 
     def __len__(self):
         return len(self.images)
