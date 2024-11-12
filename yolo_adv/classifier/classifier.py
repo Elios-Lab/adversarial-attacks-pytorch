@@ -38,13 +38,13 @@ class Classifier():
         # Transformations
         if normalize:
             transform = transforms.Compose([
-                # transforms.Resize((224, 224)),  # Resize images to a common size
+                transforms.Resize((224, 224)),  # Resize images to a common size
                 transforms.ToTensor(),          # Convert images to PyTorch tensors
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize for pre-trained models
             ])
         else:
             transform = transforms.Compose([
-                # transforms.Resize((224, 224)),  # Resize images to a common size
+                transforms.Resize((224, 224)),  # Resize images to a common size
                 transforms.ToTensor(),          # Convert images to PyTorch tensors
             ])
         
@@ -61,9 +61,9 @@ class Classifier():
         test_dataset = datasets.ImageFolder(root=test_path, transform=transform)
 
         # Data loaders
-        self.train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle)
-        self.valid_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=shuffle)
-        # self.test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        self.train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=4)
+        self.valid_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=4)
+        # self.test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
      
 
     # Training function
@@ -302,7 +302,7 @@ class Classifier():
     def process_image(self, image_path=None, image:Image=None):
         # Define the same transformations as used during training
         transform = transforms.Compose([
-            # transforms.Resize((224, 224)),  # Assuming you used this size during training
+            transforms.Resize((224, 224)),  # Assuming you used this size during training
             transforms.ToTensor(),
             # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
@@ -365,4 +365,24 @@ class Classifier():
 
         def forward(self, x):
             return self.resnet(x)
+    
+    class MobileNetV2(nn.Module):
+        def __init__(self, alpha=1.0):
+            super(Classifier.MobileNetV2, self).__init__()
+            self.mobilenet = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT, width_mult=alpha)  # Using MobileNetV2 with width multiplier
+            for param in self.mobilenet.parameters():
+                param.requires_grad = False  # Freeze the MobileNetV2 parameters, only final layer will be trained
+            
+            # Replace the classifier
+            self.mobilenet.classifier[1] = nn.Sequential(
+                nn.Linear(self.mobilenet.classifier[1].in_features, 3)  # 3 classes: clean, pixle, poltergeist
+            )
+            #     nn.Linear(self.mobilenet.classifier[1].in_features, 512),
+            #     nn.ReLU(),
+            #     nn.Dropout(0.2),
+            #     nn.Linear(512, 3)  # 3 classes: clean, pixle, poltergeist
+            # )
+
+        def forward(self, x):
+            return self.mobilenet(x)
     
