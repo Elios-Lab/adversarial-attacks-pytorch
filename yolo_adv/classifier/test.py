@@ -7,7 +7,7 @@ if __name__ == "__main__":
     classifier.load_model(model_path='yolo_adv/classifier/runs/3_classes/last.pt')
     #./yolo_adv/classifier/runs/exp/luca_last.pt
     # print(classifier.predict(image_path=img_path))
-    result = classifier.evaluate_model_on_dataset(dataset_path=ds_path)
+    result = classifier.evaluate_model_on_dataset(dataset_path=ds_path, amp=True)
     print(f'Accuracy: {result[0]}')
     print(f'Precision: {result[1]}')    
     print(f'Recall: {result[2]}')

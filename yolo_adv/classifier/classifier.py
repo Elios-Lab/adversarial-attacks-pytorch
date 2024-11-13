@@ -30,6 +30,7 @@ class Classifier():
         # Check if CUDA (GPU support) is available
         if torch.cuda.is_available():
             print("GPU is available. Using GPU:", torch.cuda.get_device_name(torch.cuda.current_device()))
+            self.model.cuda()
         elif torch.backends.mps.is_available():
             print('MPS is available. Using MPS.')
         else:
@@ -87,8 +88,9 @@ class Classifier():
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr, weight_decay=1e-5)
         self.model.train()
         
-        # Initialize GradScaler for mixed precision training
-        scaler = GradScaler() if amp else None
+        if amp:
+            # Initialize GradScaler for mixed precision training
+            scaler = GradScaler()
         
         # Early stopping criteria
         best_val_loss = float('inf')
@@ -98,18 +100,24 @@ class Classifier():
             self.model.train()
             with tqdm(self.train_loader, unit="batch", leave=False) as tepoch:
                 for i, (images, labels) in enumerate(tepoch):
-                    images, labels = images.cuda(), labels.cuda() if torch.cuda.is_available() else images, labels
+                    if torch.cuda.is_available():
+                        images, labels = images.cuda(), labels.cuda()
+                    else:
+                        images, labels = images, labels
                     self.optimizer.zero_grad()
                                        
                     if amp:
+                        # Convert inputs to half precision
+                        images = images.half()
                         # Forward
-                        with autocast():
+                        with autocast(device_type='cuda' if torch.cuda.is_available() else 'cpu'):
                             outputs = self.model(images)
                             loss = criterion(outputs, labels)
-                        # Backward  
+                        # Backward 
                         scaler.scale(loss).backward()
                         scaler.step(self.optimizer)
                         scaler.update()
+
                     else:
                         # Forward
                         outputs = self.model(images)
@@ -126,7 +134,7 @@ class Classifier():
             print(f"Epoch [{self.current_epoch}/{epochs}], Loss: {loss_value:.4f}")
             if self.current_epoch > 0 or valid_period == 1:
                 if self.current_epoch % valid_period == 0:
-                    val_loss, accuracy, precision, recall, f1 = self.validate(criterion)
+                    val_loss, accuracy, precision, recall, f1 = self.validate(criterion, amp)
                     self.writer.add_scalar('Loss/val', val_loss, self.current_epoch)
                     self.writer.add_scalar('Accuracy/val', accuracy, self.current_epoch)
                     self.writer.add_scalar('Precision/val', precision, self.current_epoch)
@@ -146,8 +154,14 @@ class Classifier():
             
         self.writer.close()
         torch.save(self.model.state_dict(), f'./yolo_adv/classifier/runs/{self.exp_name}/last.pt')
+        # Convert the model to half precision
+        self.model.half()
+        for layer in self.model.modules():
+            if isinstance(layer, nn.BatchNorm2d):
+                layer.float()
+        torch.save(self.model.state_dict(), f'./yolo_adv/classifier/runs/{self.exp_name}/last_half.pt')
             
-    def validate(self, criterion):
+    def validate(self, criterion, amp=False):
         self.model.eval()  # Set the model to evaluation mode
         total_loss = 0
         total_samples = 0
@@ -156,7 +170,19 @@ class Classifier():
 
         with torch.no_grad():
             for images, labels in self.valid_loader:
-                outputs = self.model(images)
+                if torch.cuda.is_available():
+                    images, labels = images.cuda(), labels.cuda()
+                else:
+                    images, labels = images, labels
+                if amp:
+                    # Convert inputs to half precision
+                    images = images.half()
+                    # Forward
+                    with autocast(device_type='cuda' if torch.cuda.is_available() else 'cpu'):
+                        outputs = self.model(images)
+                else:
+                    outputs = self.model(images)
+                    
                 _, predicted = torch.max(outputs.data, 1)
                 all_labels.extend(labels.tolist())
                 all_predictions.extend(predicted.tolist())
@@ -175,14 +201,25 @@ class Classifier():
 
 
         
-    def evaluate(self, valid_loader=None):
+    def evaluate(self, valid_loader=None, amp=False):
         if valid_loader is None:
             valid_loader = self.valid_loader
         self.model.eval()
         total, correct = 0, 0
         with torch.no_grad():
-            for images, labels in valid_loader:
-                outputs = self.model(images)
+            for images, labels in valid_loader:     
+                if torch.cuda.is_available():
+                    images, labels = images.cuda(), labels.cuda()
+                else:
+                    images, labels = images, labels
+                if amp:
+                    # Convert inputs to half precision
+                    images = images.half()
+                    # Forward
+                    with autocast(device_type='cuda' if torch.cuda.is_available() else 'cpu'):
+                        outputs = self.model(images)
+                else:
+                    outputs = self.model(images)
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
@@ -207,7 +244,7 @@ class Classifier():
         self.model.eval()  # Set the model to evaluation mode
         self.model.to(device)  # Move the model to the appropriate device
         
-    def predict(self, image_path=None, image:Image=None):
+    def predict(self, image_path=None, image:Image=None, amp=False):
         """
         Perform inference on the input data using the trained model.
 
@@ -227,16 +264,20 @@ class Classifier():
 
         # Perform inference
         with torch.no_grad():
-            outputs = self.model(image)
+            if amp:
+                with autocast(device_type='cuda' if torch.cuda.is_available() else 'cpu'):
+                    outputs = self.model(image)
+            else:
+                outputs = self.model(image)
             _, predicted = torch.max(outputs, 1)
-            
+
         # Convert index to class name
         predicted_class = self.class_names[predicted.item()]
 
         return predicted_class
     
     # Function to evaluate the model on the dataset
-    def evaluate_model_on_dataset(self, dataset_path):
+    def evaluate_model_on_dataset(self, dataset_path, amp=False):
         actual_classes = sorted([d for d in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, d))])
         classes = list(self.class_names.values())
         assert actual_classes == classes, f"Subfolders must be named {classes}, but found {actual_classes}"
@@ -258,7 +299,7 @@ class Classifier():
                 with tqdm(os.listdir(class_path), unit="img", leave=False, initial=1) as tepoch:
                     for img_file in tepoch:
                         img_path = os.path.join(class_path, img_file)
-                        predicted_class = self.predict(img_path)
+                        predicted_class = self.predict(img_path, amp=amp)
                         all_labels.append(class_name)
                         all_predictions.append(predicted_class)
                         if predicted_class == class_name == 'pixle' or predicted_class == class_name == 'poltergeist':
