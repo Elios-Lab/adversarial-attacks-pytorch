@@ -3,7 +3,9 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from torchvision import models
+from torchvision.transforms import InterpolationMode
 import torch.optim as optim
+from torch.amp import GradScaler, autocast
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import os
@@ -36,22 +38,17 @@ class Classifier():
         self.class_names = {0: 'clean', 1: 'pixle', 2: 'poltergeist'}
 
         
-    def load_dataset(self, root, normalize=True, batch_size=16, shuffle=True):       
+    def load_dataset(self, root, batch_size=16, shuffle=True):       
         if not os.path.exists(root):
             raise FileNotFoundError(f"The specified path does not exist: {root}")
 
-        # Transformations
-        if normalize:
-            transform = transforms.Compose([
-                transforms.Resize((224, 224)),  # Resize images to a common size
-                transforms.ToTensor(),          # Convert images to PyTorch tensors
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize for pre-trained models
-            ])
-        else:
-            transform = transforms.Compose([
-                transforms.Resize((224, 224)),  # Resize images to a common size
-                transforms.ToTensor(),          # Convert images to PyTorch tensors
-            ])
+        # Transformation
+        transform = transforms.Compose([
+            transforms.Resize(256, interpolation=InterpolationMode.BILINEAR),  # Resize images to a common size
+            transforms.CenterCrop(224),  # Crop the center 224x224 pixels
+            transforms.ToTensor(),          # Convert images to PyTorch tensors
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize for pre-trained models
+        ])
         
         # Load datasets from separate train, validation, and test folders
         train_path = os.path.join(root, 'train')
@@ -72,7 +69,7 @@ class Classifier():
      
 
     # Training function
-    def train(self, exp_name='exp', epochs=10, lr=0.001, valid_period=5, ckpt_period=None, patience=None):
+    def train(self, exp_name='exp', epochs=10, lr=0.001, valid_period=5, ckpt_period=None, patience=None, amp=False):
         self.exp_name = exp_name
         # Check if validation and checkpoint periods are valid
         if valid_period is None:
@@ -90,6 +87,9 @@ class Classifier():
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr, weight_decay=1e-5)
         self.model.train()
         
+        # Initialize GradScaler for mixed precision training
+        scaler = GradScaler() if amp else None
+        
         # Early stopping criteria
         best_val_loss = float('inf')
         patience_counter = 0
@@ -98,13 +98,25 @@ class Classifier():
             self.model.train()
             with tqdm(self.train_loader, unit="batch", leave=False) as tepoch:
                 for i, (images, labels) in enumerate(tepoch):
+                    images, labels = images.cuda(), labels.cuda() if torch.cuda.is_available() else images, labels
                     self.optimizer.zero_grad()
-                    # Forward
-                    outputs = self.model(images)
-                    loss = criterion(outputs, labels)
-                    # Backward
-                    loss.backward()
-                    self.optimizer.step()
+                                       
+                    if amp:
+                        # Forward
+                        with autocast():
+                            outputs = self.model(images)
+                            loss = criterion(outputs, labels)
+                        # Backward  
+                        scaler.scale(loss).backward()
+                        scaler.step(self.optimizer)
+                        scaler.update()
+                    else:
+                        # Forward
+                        outputs = self.model(images)
+                        loss = criterion(outputs, labels)
+                        # Backward
+                        loss.backward()
+                        self.optimizer.step()
                     # Log training loss
                     loss_value = loss.item()
                     self.writer.add_scalar('Loss/train', loss_value, self.current_epoch * len(self.train_loader) + i)
@@ -184,8 +196,8 @@ class Classifier():
         model_path (str): Path to the saved model state dictionary.
         map_to_device (bool): If True, map the model to the appropriate device (GPU if available).
         """
-        if not hasattr(self, 'model'):
-            self.model = self.ResNet50()
+        # if not hasattr(self, 'model'):
+        #     self.model = self.ResNet50()
 
         device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
         state_dict = torch.load(model_path, map_location=device)
@@ -302,15 +314,19 @@ class Classifier():
         disp.plot(cmap=plt.cm.Blues)
         plt.title('Confusion Matrix')
         plt.show()
+        # Print confusion matrix in the terminal
+        print("Confusion Matrix:")
+        print(cm)
 
         
     def process_image(self, image_path=None, image:Image=None):
         # Define the same transformations as used during training
         transform = transforms.Compose([
-            transforms.Resize((224, 224)),  # Assuming you used this size during training
-            transforms.ToTensor(),
-            # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
+                transforms.Resize(256, interpolation=InterpolationMode.BILINEAR),  # Resize images to a common size
+                transforms.CenterCrop(224),  # Crop the center 224x224 pixels
+                transforms.ToTensor(),          # Convert images to PyTorch tensors
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize for pre-trained models
+            ])
 
         # Load the image
         if image is not None:

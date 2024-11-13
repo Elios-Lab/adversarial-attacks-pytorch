@@ -3,6 +3,7 @@ import shutil
 import random
 import re
 from PIL import Image
+from tqdm import tqdm
 
 # Paths to the original datasets
 clean_path = 'C:/Users/lazzaroni/Documents/adv/datasets/clean'
@@ -46,9 +47,8 @@ def get_base_filenames(path, split, subfolder='images'):
 
 # Function to process and copy images
 def process_and_copy_images(split, basenames, source_paths, dest_path):
-    for base_name in basenames:
+    for base_name in tqdm(basenames, desc="Processing basenames"):
         for cls, source_path in source_paths.items():
-            img_subfolder = ''
             split_source_path = os.path.join(source_path, split)
             if cls == 'clean' and os.path.exists(os.path.join(split_source_path, 'images')):
                 split_source_path = os.path.join(split_source_path, 'images')
@@ -58,14 +58,14 @@ def process_and_copy_images(split, basenames, source_paths, dest_path):
             matched_files = [f for f in os.listdir(split_source_path)
                              if pattern.match(os.path.splitext(f)[0]) and f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif'))]
             random.shuffle(matched_files)
-            for fname in matched_files:
+            for fname in tqdm(matched_files, desc=f"Copying files for {base_name} - {cls}", leave=False):
                 src_file = os.path.join(split_source_path, fname)
                 dest_dir = os.path.join(dest_path, split, cls)
                 dest_file = os.path.join(dest_dir, os.path.splitext(fname)[0] + '.png')
                 try:
                     with Image.open(src_file) as img:
-                        img = img.convert('RGB')
-                        img = img.resize((640, 480))
+                        # img = img.convert('RGB')
+                        # img = img.resize((640, 480))
                         img.save(dest_file, 'PNG')
                 except Exception as e:
                     print(f"Error processing file {src_file}: {e}")
