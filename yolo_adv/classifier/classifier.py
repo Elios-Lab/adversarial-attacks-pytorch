@@ -20,7 +20,7 @@ class Classifier():
         if model == 'resnet50':
             self.model = self.ResNet50()
         elif model == 'mobilenetv2':
-            self.model = self.MobileNetV2()
+            self.model = self.MobileNetV2(alpha=1)
         else:
             raise ValueError("Invalid model name. Choose from 'resnet50' or 'mobilenetv2'")
         print(f'Using {model} model')
@@ -50,6 +50,19 @@ class Classifier():
             transforms.ToTensor(),          # Convert images to PyTorch tensors
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize for pre-trained models
         ])
+        
+        # # Data augmentation on training set
+        # transform_train = transforms.Compose([
+        #     transforms.Resize(256, interpolation=InterpolationMode.BILINEAR),
+        #     transforms.RandomHorizontalFlip(),
+        #     # transforms.RandomRotation(10),
+        #     transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
+        #     # transforms.RandomPerspective(distortion_scale=0.2, p=0.5),
+        #     # transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+        #     transforms.CenterCrop(224),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        # ])
         
         # Load datasets from separate train, validation, and test folders
         train_path = os.path.join(root, 'train')
@@ -96,7 +109,7 @@ class Classifier():
         best_val_loss = float('inf')
         patience_counter = 0
         
-        for self.current_epoch in tqdm(range(epochs)):
+        for self.current_epoch in tqdm(range(epochs), desc="Epochs"):
             self.model.train()
             with tqdm(self.train_loader, unit="batch", leave=False) as tepoch:
                 for i, (images, labels) in enumerate(tepoch):
@@ -131,7 +144,7 @@ class Classifier():
                     # Update the progress bar description with the current loss
                     tepoch.set_postfix(loss=loss_value)
 
-            print(f"Epoch [{self.current_epoch}/{epochs}], Loss: {loss_value:.4f}")
+            tqdm.write(f"Epoch [{self.current_epoch}/{epochs}], Loss: {loss_value:.4f}")
             if self.current_epoch > 0 or valid_period == 1:
                 if self.current_epoch % valid_period == 0:
                     val_loss, accuracy, precision, recall, f1 = self.validate(criterion, amp)
@@ -140,14 +153,14 @@ class Classifier():
                     self.writer.add_scalar('Precision/val', precision, self.current_epoch)
                     self.writer.add_scalar('Recall/val', recall, self.current_epoch)
                     self.writer.add_scalar('F1/val', f1, self.current_epoch)
-                    print(f"Validation loss: {val_loss:.4f}")
+                    tqdm.write(f"Validation loss: {val_loss:.4f}")
                     if val_loss < best_val_loss:
                         best_val_loss = val_loss
                         patience_counter = 0
                     else:
                         patience_counter += 1
                         if patience is not None and patience_counter >= patience:
-                            print("Early stopping triggered")
+                            tqdm.write("Early stopping triggered")
                             break
                 if self.current_epoch % ckpt_period == 0:
                     torch.save(self.model.state_dict(), f'{checkpoint_path}/{self.current_epoch}.pt')
@@ -237,7 +250,7 @@ class Classifier():
         #     self.model = self.ResNet50()
 
         device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-        state_dict = torch.load(model_path, map_location=device)
+        state_dict = torch.load(model_path, map_location=device, weights_only=True)
         if 'model_state_dict' in state_dict:
             state_dict = state_dict['model_state_dict'] 
         self.model.load_state_dict(state_dict)
@@ -310,8 +323,8 @@ class Classifier():
                             false_positives += 1
                         elif predicted_class == 'clean' and (class_name == 'pixle' or class_name == 'poltergeist'):
                             false_negatives += 1
-                        else:
-                            print(f"Unexpected class: {predicted_class} for image classified as {class_name}")
+                        # else:
+                        #     print(f"Unexpected class: {predicted_class} for image classified as {class_name}")
                             
                         # elif predicted_class == 'adv' and class_name == 'real':
                         #     false_positives += 1
@@ -422,7 +435,7 @@ class Classifier():
                 nn.Linear(self.resnet.fc.in_features, 512),
                 nn.ReLU(),
                 nn.Dropout(0.2),
-                nn.Linear(512, 3)  # 2 classes: attacked and non-attacked
+                nn.Linear(512, 3)  # 3 classes: clean, pixle, poltergeist
             )
 
         def forward(self, x):
@@ -432,17 +445,26 @@ class Classifier():
         def __init__(self, alpha=1.0):
             super(Classifier.MobileNetV2, self).__init__()
             self.mobilenet = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT, width_mult=alpha)  # Using MobileNetV2 with width multiplier
-            for param in self.mobilenet.parameters():
-                param.requires_grad = False  # Freeze the MobileNetV2 parameters, only final layer will be trained
+            # for param in self.mobilenet.parameters():
+            #     param.requires_grad = False  # Freeze the MobileNetV2 parameters, only final layer will be trained
             
+            # Unfreeze some layers
+            for param in self.mobilenet.features[-4:].parameters():
+                param.requires_grad = True
             # Replace the classifier
             self.mobilenet.classifier[1] = nn.Sequential(
                 nn.Linear(self.mobilenet.classifier[1].in_features, 3)  # 3 classes: clean, pixle, poltergeist
             )
+            
+            # # Replace the classifier with additional layers
+            # self.mobilenet.classifier[1] = nn.Sequential(
             #     nn.Linear(self.mobilenet.classifier[1].in_features, 512),
             #     nn.ReLU(),
             #     nn.Dropout(0.2),
-            #     nn.Linear(512, 3)  # 3 classes: clean, pixle, poltergeist
+            #     nn.Linear(512, 256),
+            #     nn.ReLU(),
+            #     nn.Dropout(0.2),
+            #     nn.Linear(256, 3)  # 3 classes: clean, pixle, poltergeist
             # )
 
         def forward(self, x):

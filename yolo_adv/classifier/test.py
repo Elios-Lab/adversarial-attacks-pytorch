@@ -2,9 +2,9 @@ from classifier import Classifier
 
 if __name__ == "__main__":
     # img_path = '/home/pigo/projects/adversarial-attacks-pytorch/yolo_adv/adv_data/norm/images/dayClip7--00930.jpg'
-    ds_path = '/home/elios/lazzaroni/adv/FC_2K_500_1K/test'  # r'C:\Users\lazzaroni\Documents\adv\datasets\FC\test'
+    ds_path = '/home/elios/lazzaroni/adv/datasets/FC_5K_3K_3K/test'  # r'C:\Users\lazzaroni\Documents\adv\datasets\FC\test'
     classifier = Classifier('mobilenetv2')
-    classifier.load_model(model_path='yolo_adv/classifier/runs/3_classes/last.pt')
+    classifier.load_model(model_path='yolo_adv/classifier/runs/3_classes_mn/last_half.pt')
     #./yolo_adv/classifier/runs/exp/luca_last.pt
     # print(classifier.predict(image_path=img_path))
     result = classifier.evaluate_model_on_dataset(dataset_path=ds_path, amp=True)

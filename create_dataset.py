@@ -6,18 +6,18 @@ from PIL import Image
 from tqdm import tqdm
 
 # Paths to the original datasets
-clean_path = 'C:/Users/lazzaroni/Documents/adv/datasets/clean'
-pixle_path = 'C:/Users/lazzaroni/Documents/adv/datasets/pixle'
-poltergeist_path = 'C:/Users/lazzaroni/Documents/adv/datasets/poltergeist'
+clean_path = '/home/elios/lazzaroni/adv/datasets/clean'
+pixle_path = '/home/elios/lazzaroni/adv/datasets/pixle'
+poltergeist_path = '/home/elios/lazzaroni/adv/datasets/poltergeist'
 
 # Path to the new dataset
-new_dataset_path = r'\\wsl.localhost\Ubuntu\home\lazzaroni\adv\datasets\FC_2K_500_1K'
+new_dataset_path = '/home/elios/lazzaroni/adv/datasets/FC_5K_3K_3K'
 
 # Number of images for each split
 num_images = {
-    'train': 2000,
-    'val': 500,
-    'test': 1000
+    'train': 5000,
+    'val': 3000,
+    'test': 3000
 }
 
 # Splits and classes
@@ -47,7 +47,7 @@ def get_base_filenames(path, split, subfolder='images'):
 
 # Function to process and copy images
 def process_and_copy_images(split, basenames, source_paths, dest_path):
-    for base_name in tqdm(basenames, desc="Processing basenames"):
+    for base_name in tqdm(basenames, desc=f"Processing {base_name}"):
         for cls, source_path in source_paths.items():
             split_source_path = os.path.join(source_path, split)
             if cls == 'clean' and os.path.exists(os.path.join(split_source_path, 'images')):
