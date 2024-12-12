@@ -28,8 +28,8 @@ class YOLOv8Dataloader(Dataset):
         image = Image.open(img_name).convert('RGB')
                 
         # Resize the image to a consistent size
-        resize_transform = transforms.Resize((480, 640))
-        image = resize_transform(image)
+        # resize_transform = transforms.Resize((736, 1280))  # Updated dimensions
+        # image = resize_transform(image)
         
         image = transforms.ToTensor()(image)
         image = image[None, :, :, :]
@@ -63,7 +63,13 @@ class YOLOv8DetectionLoss():
     def __init__(self, model, max_steps):
         self.model = model
         self.det_model = self.model.model
-        self.det_model.criterion.proj = self.det_model.criterion.proj.to(device='cuda', non_blocking=True)
+        self.det_model.args["box"] = 7.5
+        self.det_model.args["cls"] = 0.5
+        self.det_model.args["dfl"] = 1.5
+        self.det_model.args["pose"] = 12.0
+        self.det_model.args["kobj"] = 1.0
+        
+        self.det_model.init_criterion().proj = self.det_model.init_criterion().proj.to(device='cuda', non_blocking=True)
         self.losses = np.zeros(max_steps)
         
     def compute_loss(self, image, cls, box, step, get_logits=False, save_loss=True):
