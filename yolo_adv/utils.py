@@ -26,10 +26,6 @@ class YOLOv8Dataloader(Dataset):
         # Load image
         img_name = os.path.join(self.images_dir, self.images[idx])
         image = Image.open(img_name).convert('RGB')
-                
-        # Resize the image to a consistent size
-        # resize_transform = transforms.Resize((736, 1280))  # Updated dimensions
-        # image = resize_transform(image)
         
         image = transforms.ToTensor()(image)
         image = image[None, :, :, :]
@@ -73,6 +69,14 @@ class YOLOv8DetectionLoss():
         self.losses = np.zeros(max_steps)
         
     def compute_loss(self, image, cls, box, step, get_logits=False, save_loss=True):
+        
+                
+        # Resize the image to a consistent size
+        resize_transform = transforms.Resize((736, 1280))  # Updated dimensions
+        image = resize_transform(image)
+
+        
+        # image = torch.nn.functional.interpolate(image, size=(736, 1280), mode='bilinear', align_corners=False)
         
         batch = {'batch_idx': torch.randn_like(cls).to(device='cuda', non_blocking=True) ,'img': image.to(device='cuda', non_blocking=True),\
             'cls': cls.to(device='cuda', non_blocking=True) ,'bboxes': box.to(device='cuda', non_blocking=True)}

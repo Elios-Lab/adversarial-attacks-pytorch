@@ -1,4 +1,5 @@
 train: /home/pigo/Desktop/BoschDriveU5px/test/5px/
+test: /home/pigo/Desktop/BoschDriveU5px/test/5px/
 val: /home/pigo/Desktop/BoschDriveU5px/test/5px/
 nc: 5 # number of classes
 names: [0:'Green', 1:'Yellow', 2:'Red', 3:'Off', 4:'Red-Yellow']
