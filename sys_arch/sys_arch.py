@@ -1,3 +1,6 @@
+import sys
+sys.path.append('/home/lazzaroni/adv/adversarial-attacks-pytorch')
+sys.path.append('/home/lazzaroni/adv/adversarial-attacks-pytorch/yolo_adv/cleaner')
 from yolo_adv.classifier.classifier import Classifier
 from ultralytics import YOLO
 import os
@@ -7,12 +10,14 @@ from PIL import Image
 import io
 from tqdm import tqdm
 import re
+from yolo_adv.cleaner.predictor import Predictor as FCL_poltergeist
 
 class FrameSequence:
     def __init__(self, window_size_tor, window_size_ad, frames_path):
         self.window_size_tor = window_size_tor
         self.window_size_ad = window_size_ad
-        self.frames = sorted(os.listdir(frames_path), key=self.sort_key)
+        self.frames = np.array(sorted(os.listdir(frames_path)))
+        # np.random.shuffle(self.frames[:350])
         # print('Frames: ', self.frames[:5])
         self.num_of_frames = len(self.frames)
         self.adversarial_detections_tor = np.full(window_size_tor, False)
@@ -24,7 +29,7 @@ class FrameSequence:
         self.worst_case_ad = np.sum(self.weights_ad * np.full_like(self.weights_ad, True))
         # Initialize the array of attacks to all zeros
         self.attack_indices = np.zeros(len(self.frames))
-        self.attack_mapping = {'None': 0, 'PGD': 1, 'F-FGSM': 2, 'VNI-FGSM': 3, 'Pixle': 4, 'DeepFool': 5}
+        self.attack_mapping = {'clean': 0, 'pixle': 1, 'poltergeist': 2}
         # Update the array based on image file names
         for i, frame in enumerate(self.frames):
             for keyword, index in self.attack_mapping.items():
@@ -37,12 +42,13 @@ class FrameSequence:
         return int(num[0]) if num else 0
 
      
-    def update_detections(self, is_adversarial):
+    def update_detections(self, frame_id):
+        is_adv = frame_id == 1 or frame_id == 2
         # Add the latest detection and ensure the list size doesn't exceed the window size
         self.adversarial_detections_tor = np.roll(self.adversarial_detections_tor, 1)
         self.adversarial_detections_ad = np.roll(self.adversarial_detections_ad, 1)
-        self.adversarial_detections_tor[0] = is_adversarial
-        self.adversarial_detections_ad[0] = is_adversarial
+        self.adversarial_detections_tor[0] = is_adv
+        self.adversarial_detections_ad[0] = is_adv
                 
     def calculate_weighted_sum(self, ad=False):
         if not ad:  # if not driving in automated mode, check the AD resume window
@@ -85,61 +91,77 @@ def compress_image_to_jpeg(image, quality=100):
     # Return the in-memory file
     return image
 
-def temp_jpeg_compression(image, perc=40):
-    # Simulate a JPEG compression that is able to remove adversarial perturbations 40% of the time
-    return np.random.randint(0, 100) > perc
+# def temp_jpeg_compression(image, perc=40):
+#     # Simulate a JPEG compression that is able to remove adversarial perturbations 40% of the time
+#     return np.random.randint(0, 100) > perc
+def clean_image(input_path: str, output_path: str, weights_path: str, model_name: str = ''):
+    '''
+    Clean the image using the DeblurGANv2 model
+    input_path: str: Path to the input image
+    output_path: str: Path to save the cleaned image (not used)
+    weights_path: str: Path to the model weights
+    model_name: str: Name of the model architecture
+    '''
+    predictor = FCL_poltergeist(weights_path, model_name)
+    cleaned_img = predictor(image)
+
+    return cleaned_img
         
 if __name__ == "__main__":
-    seq = 'massive_noend'
-    save_folder = 'C:/Users/luca/OneDrive - unige.it/Uni/Pubblicazioni/IEEE_OJSP_Adversarial/pics/seqs/'
+    seq = 'massive_mix'  # massive
+    save_folder = './sys_arch/seq_results/'
     save_folder += seq + '/'
-    load_seq_from_file = True
+    load_seq_from_file = False
     window_size_tor = 5
     window_size_ad = 200
     to_threshold = 20 #12
     ad_threshold = 0
-    frames_path = 'C:/Users/luca/Documents/tld_adv_seq/' + seq + '/'
+    frames_path = '/home/lazzaroni/adv/datasets/adv_seq/' + seq + '/'
     if not load_seq_from_file:
         fs = FrameSequence(window_size_tor, window_size_ad, frames_path=frames_path)
-        classifier = Classifier()
-        classifier.load_model(model_path='yolo_adv/classifier/cls_last.pt')
+        classifier = Classifier('mobilenetv2')
+        classifier.load_model(model_path='yolo_adv/classifier/FC_FP16.pt')
+        FCL_poltergeist = FCL_poltergeist('yolo_adv/cleaner/fpn_mobilenet.h5')
         tld_model = YOLO('yolo_adv/best.pt')
         todm = DecisionMaker(threshold=to_threshold)
         adm = DecisionMaker(threshold=ad_threshold)
         automated_mode = True  # Start in automated driving mode
         
-        fc_post_history = np.full(fs.num_of_frames, False)  # True if frame is classified as adversarial
-        fc_pre_history = np.full(fs.num_of_frames, False)  # True if frame is classified as adv before cleaning
+        fc_post_history = np.full(fs.num_of_frames, 0)  # 'pixle' or 'poltergeist' if frame is classified as adversarial
+        fc_pre_history = np.full(fs.num_of_frames, 0)  # 'pixle' or 'poltergeist'  if frame is classified as adv before cleaning
         fe_history = np.full(fs.num_of_frames, False)  # True if frame is enhanced
         ad_history = np.full(fs.num_of_frames, False)  # True while in AD mode
         thrs_history = np.full(fs.num_of_frames, 0, dtype=np.float32)  # Threshold history
-        
+       
         for i, frame in tqdm(enumerate(fs.frames), total=fs.num_of_frames, unit='frame'):
             image = Image.open(frames_path+frame)
-            # fc_pre_history[i] = is_adversarial = classifier.predict(image=image) == 'adv'  
+            # Frame checker
+            fc_pre_history[i] = frame_id = fs.attack_mapping[classifier.predict(image=image, amp=True)] 
             # if frame name contains 'PGD', 'F-FGSM', 'VNI-FGSM', 'Pixle', or 'DeepFool', classify as adversarial 85% of the time, else classify it as non-adversarial 85% of the time
-            if any(keyword.lower().replace("-", "") in frame.lower() for keyword in fs.attack_mapping.keys()):
-                is_adversarial = np.random.randint(0, 100) <= 84
-            else:
-                is_adversarial = np.random.uniform(0, 100) >= 99.75
-            fc_pre_history[i] = is_adversarial
-            if is_adversarial:  # Try frame enhancement
+            # if any(keyword.lower().replace("-", "") in frame.lower() for keyword in fs.attack_mapping.keys()):
+            #     frame_id = np.random.randint(0, 100) <= 84
+            # else:
+            #     frame_id = np.random.uniform(0, 100) >= 99.75
+            # fc_pre_history[i] = frame_id
+            if frame_id != 0:  # Frame cleaner
                 # image = compress_image_to_jpeg(image, quality=100)
-                # is_adversarial = classifier.predict(image=image) == 'adv'
-                is_adversarial = temp_jpeg_compression(image, perc=46)
+                # frame_id = classifier.predict(image=image) == 'adv'
+                # frame_id = temp_jpeg_compression(image, perc=46)
+                image = Image.fromarray(FCL_poltergeist(np.array(image), None))
+                fc_post_history[i] = frame_id = fs.attack_mapping[classifier.predict(image=image, amp=True)]
                 fe_history[i] = True
-            fc_post_history[i] = is_adversarial
-            fs.update_detections(is_adversarial)
+            # fc_post_history[i] = frame_id
+            fs.update_detections(frame_id)
             threshold = fs.calculate_sum(automated_mode)  # fs.calculate_weighted_sum()
             thrs_history[i] = threshold
-            if not is_adversarial:  # If the frame is not adversarial, run TLD
+            if frame_id == 0:  # If the frame is not adversarial, run TLD
                 # results = tld_model.predict(image)
                 if not automated_mode:  # Driving in manual mode
                     automated_mode = ad_history[i] = adm.check_for_ad(threshold)
                 # TODO else output detection results
                 else:  # Driving in AD mode and no adv detected, so continue AD
                     automated_mode = ad_history[i] = True
-            else: # Frame is adversarial, enhancement not successful
+            else: # Frame is adversarial, cleaning not successful
                 if not automated_mode: # Driving in manual mode
                     automated_mode = ad_history[i] = adm.check_for_ad(threshold)
                 else:  # Driving in AD mode
@@ -147,7 +169,7 @@ if __name__ == "__main__":
                     
         
         # Convert boolean arrays to integers
-        fc_post_history = fc_post_history.astype(int)
+        # fc_post_history = fc_post_history.astype(int)
         fe_history = fe_history.astype(int)
         # ad_history = np.logical_not(ad_history).astype(int)
         ad_history = ad_history.astype(int)
@@ -172,6 +194,8 @@ if __name__ == "__main__":
     # Modify attack_indices to be a binary indicator of whether an attack occurred or not
     name = 'attack_history'
     attack_occurred = np.array([0 if attack == 0 else 1 for attack in fs.attack_indices]) if not load_seq_from_file else np.load(save_folder + name + '.npy')
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
     np.save(save_folder + 'attack_occurred.npy', attack_occurred)
 
     ax0.step(range(len(attack_occurred)), attack_occurred, where='post', color='orange')
@@ -185,8 +209,7 @@ if __name__ == "__main__":
     np.save(save_folder + name + '.npy', attack_occurred)
     fig0.savefig(save_folder + name + '.svg', transparent=True, pad_inches=0, format='svg')
     
-    
-    
+    # Plot threshold history
     fig1, ax1 = plt.subplots(figsize=figsize)
     name = 'threshold_history'
     thrs_history = np.load(save_folder + name + '.npy') if load_seq_from_file else thrs_history
@@ -225,7 +248,7 @@ if __name__ == "__main__":
     fig1.savefig(save_folder + name + '.svg', transparent=True, pad_inches=0, format='svg')
     
     
-    
+    # Plot Frame Checker history
     fig2, ax2 = plt.subplots(figsize=figsize)
     
     name = 'frame_checker'
@@ -234,17 +257,16 @@ if __name__ == "__main__":
     # ax2.step(range(len(fc_post_history)), fc_post_history, where='post', color='red', label='Attack Confirmed')
     # ax2.step(range(len(fc_pre_history)), fc_pre_history, where='post', color='blue', label='Frame Cleaner')
     # Create a new array that is True only when both fc_pre_history and fc_post_history are True
-    both_attacked = np.logical_and(fc_pre_history, fc_post_history)
+    # both_attacked = np.logical_and(fc_pre_history, fc_post_history)
     ax2.step(range(len(fc_pre_history)), fc_pre_history, where='post', color='blue', label='Pre-cleaning')
-    ax2.step(range(len(both_attacked)), both_attacked, where='post', color='red', label='Post-cleaning')
+    ax2.step(range(len(fc_post_history)), fc_post_history, where='post', color='red', label='Post-cleaning')
 
     ax2.set_title('Frame Checker')
     ax2.set_xlabel('Step')
     # ax2.set_ylabel('Detection')
-    ax2.set_yticks([0, 1])
+    ax2.set_yticks(list(fs.attack_mapping.values()))
     ax2.grid()
-    ax2.set_ylim([-0.1, 1.1])
-    ax2.set_yticklabels(['Not Attacked', 'Attacked'])
+    ax2.set_yticklabels([key.replace('F-', '') if key.startswith('F-') else key for key in fs.attack_mapping.keys()])
     ax2.legend()
     
     print('Saving into: ' + save_folder)
@@ -264,6 +286,7 @@ if __name__ == "__main__":
     # ax3.set_ylim([-0.1, 1.1])
     # plt.show()
     
+    # Plot Automated Driving Mode history
     fig4, ax4 = plt.subplots(figsize=figsize)
     
     name = 'adf_state'

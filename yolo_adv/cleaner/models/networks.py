@@ -5,10 +5,6 @@ import functools
 from torch.autograd import Variable
 import numpy as np
 from models.fpn_mobilenet import FPNMobileNet
-from models.fpn_inception import FPNInception
-from models.fpn_inception_simple import FPNInceptionSimple
-from models.unet_seresnext import UNetSEResNext
-from models.fpn_densenet import FPNDense
 ###############################################################################
 # Functions
 ###############################################################################
@@ -270,22 +266,8 @@ def get_fullD(model_config):
 
 def get_generator(model_config):
     generator_name = model_config['g_name']
-    if generator_name == 'resnet':
-        model_g = ResnetGenerator(norm_layer=get_norm_layer(norm_type=model_config['norm_layer']),
-                                  use_dropout=model_config['dropout'],
-                                  n_blocks=model_config['blocks'],
-                                  learn_residual=model_config['learn_residual'])
-    elif generator_name == 'fpn_mobilenet':
+    if generator_name == 'fpn_mobilenet':
         model_g = FPNMobileNet(norm_layer=get_norm_layer(norm_type=model_config['norm_layer']))
-    elif generator_name == 'fpn_inception':
-        model_g = FPNInception(norm_layer=get_norm_layer(norm_type=model_config['norm_layer']))
-    elif generator_name == 'fpn_inception_simple':
-        model_g = FPNInceptionSimple(norm_layer=get_norm_layer(norm_type=model_config['norm_layer']))
-    elif generator_name == 'fpn_dense':
-        model_g = FPNDense()
-    elif generator_name == 'unet_seresnext':
-        model_g = UNetSEResNext(norm_layer=get_norm_layer(norm_type=model_config['norm_layer']),
-                                pretrained=model_config['pretrained'])
     else:
         raise ValueError("Generator Network [%s] not recognized." % generator_name)
 

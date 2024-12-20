@@ -16,10 +16,10 @@ class Predictor:
         weights_path: str: Path to the model weights
         model_name: str: Name of the model architecture
         '''
-        with open(r'config/config.yaml',encoding='utf-8') as cfg:
+        with open(r'./yolo_adv/cleaner/config/config.yaml',encoding='utf-8') as cfg:
             config = yaml.load(cfg, Loader=yaml.FullLoader)
         model = get_generator(model_name or config['model'])
-        model.load_state_dict(torch.load(weights_path)['model'])        
+        model.load_state_dict(torch.load(weights_path, weights_only=True)['model'])        
         self.model = model.cuda().half()
         self.model.train(True)
         # GAN inference should be in train mode to use actual stats in norm layers,

@@ -6,10 +6,10 @@ import cv2
 
 atk='pixle_new_strong'
 
-model = YOLO('/home/pigo/adversarial-attacks-pytorch/yolo_adv/best.pt')
+model = YOLO('/home/lazzaroni/adv/adversarial-attacks-pytorch/yolo_adv/best.pt')
 # image_path = f'/home/pigo/Desktop/test_data/{atk}/32942_Pixle.png'
 # results = model(image_path)
-results = model.val(data='/home/pigo/adversarial-attacks-pytorch/yolo_adv/data.yaml',split='test', imgsz=1280)
+results = model.val(data='/home/lazzaroni/adv/adversarial-attacks-pytorch/yolo_adv/data.yaml',split='test', imgsz=1280)
 metrics_df = pd.DataFrame.from_dict(results.results_dict, orient='index', columns=['Metric Value'])
 print(metrics_df.round(3))
 
