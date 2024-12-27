@@ -1,6 +1,7 @@
 import sys
-sys.path.append('/home/lazzaroni/adv/adversarial-attacks-pytorch')
-sys.path.append('/home/lazzaroni/adv/adversarial-attacks-pytorch/yolo_adv/cleaner')
+import os
+sys.path.append(os.getcwd())
+sys.path.append(os.getcwd() + '/yolo_adv/cleaner')
 from yolo_adv.classifier.classifier import Classifier
 from ultralytics import YOLO
 import os
